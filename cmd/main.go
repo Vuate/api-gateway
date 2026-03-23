@@ -18,8 +18,8 @@ func main() {
 	r.Use(middleware.Recoverer)
 
 	r.Get("/health", handler.Health)
-	r.Handle("/api/v1/quotes/*", handler.NewProxy("http://localhost:8080"))
-    r.Handle("/positions/*", handler.NewProxy("http://localhost:8081"))
+	r.Handle("/api/v1/quotes/*", handler.NewProxy("https://levi-overdainty-complimentingly.ngrok-free.dev"))
+	r.Handle("/positions/*", handler.NewProxy("http://host.docker.internal:8081"))
 
 	log.Printf("Server starting on :%s", cfg.Port)
 	if err := http.ListenAndServe(":"+cfg.Port, r); err != nil {
