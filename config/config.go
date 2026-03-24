@@ -5,7 +5,8 @@ import (
 )
 
 type Config struct {
-	Port string
+	Port      string
+	JWTSecret string
 }
 
 func Load() *Config {
@@ -13,5 +14,8 @@ func Load() *Config {
 	if port == "" {
 		port = "9000"
 	}
-	return &Config{Port: port}
+	return &Config{
+		Port:      port,
+		JWTSecret: os.Getenv("JWT_SECRET"),
+	}
 }

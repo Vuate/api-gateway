@@ -8,5 +8,5 @@ RUN go build -o api-gateway ./cmd/main.go
 FROM alpine:latest
 WORKDIR /root/
 COPY --from=builder /app/api-gateway .
-EXPOSE 8080
+EXPOSE 9000
 CMD ["./api-gateway"]
