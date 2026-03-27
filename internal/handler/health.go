@@ -4,12 +4,9 @@ import (
 	"encoding/json"
 	"net/http"
 	"time"
-)
 
-var upstreamServices = map[string]string{
-	"market-data": "https://levi-overdainty-complimentingly.ngrok-free.dev/health",
-	"exchange":    "http://host.docker.internal:8081/health",
-}
+	"github.com/Vuate/api-gateway/config"
+)
 
 type serviceStatus struct {
 	Status  string `json:"status"`
@@ -22,29 +19,36 @@ type healthResponse struct {
 	Services map[string]*serviceStatus `json:"services"`
 }
 
-func Health(w http.ResponseWriter, r *http.Request) {
-	resp := &healthResponse{
-		Status:   "ok",
-		Services: make(map[string]*serviceStatus),
-	}
-
-	client := &http.Client{Timeout: 3 * time.Second}
-
-	for name, url := range upstreamServices {
-		svc := checkService(client, url)
-		resp.Services[name] = svc
-		if svc.Status == "down" {
-			resp.Status = "degraded"
+func Health(cfg *config.Config) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		upstreamServices := map[string]string{
+			"market-data": cfg.MarketDataURL + "/health",
+			"exchange":    cfg.ExchangeURL + "/health",
 		}
-	}
 
-	w.Header().Set("Content-Type", "application/json")
-	if resp.Status == "ok" {
-		w.WriteHeader(http.StatusOK)
-	} else {
-		w.WriteHeader(http.StatusServiceUnavailable)
+		resp := &healthResponse{
+			Status:   "ok",
+			Services: make(map[string]*serviceStatus),
+		}
+
+		client := &http.Client{Timeout: 3 * time.Second}
+
+		for name, url := range upstreamServices {
+			svc := checkService(client, url)
+			resp.Services[name] = svc
+			if svc.Status == "down" {
+				resp.Status = "degraded"
+			}
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if resp.Status == "ok" {
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusServiceUnavailable)
+		}
+		json.NewEncoder(w).Encode(resp)
 	}
-	json.NewEncoder(w).Encode(resp)
 }
 
 func checkService(client *http.Client, url string) *serviceStatus {

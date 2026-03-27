@@ -21,19 +21,22 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(rateLimiter.Middleware)
 
-	r.Get("/health", handler.Health)
+	r.Get("/health", handler.Health(cfg))
+
+	marketDataCB := apimiddleware.NewCircuitBreaker("market-data")
+	exchangeCB := apimiddleware.NewCircuitBreaker("exchange")
 
 	// Public — JWT gerekmez
-	r.Handle("/api/v1/quotes/*", handler.NewProxy("https://levi-overdainty-complimentingly.ngrok-free.dev"))
-	r.Handle("/ws/quotes/*", handler.NewWebSocketProxy("https://levi-overdainty-complimentingly.ngrok-free.dev"))
+	r.Handle("/api/v1/quotes/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+	r.Handle("/ws/quotes/*", handler.NewWebSocketProxy(cfg.MarketDataURL))
 
 	// Protected — JWT zorunlu
 	r.Group(func(r chi.Router) {
 		r.Use(apimiddleware.JWTAuth(cfg.JWTSecret))
-		r.Handle("/positions/*", handler.NewProxy("http://host.docker.internal:8081"))
-		r.Handle("/api/v1/pnl/*", handler.NewProxy("http://host.docker.internal:8081"))
-		r.Handle("/api/v1/orders/*", handler.NewProxy("http://host.docker.internal:8081"))
-		r.Handle("/ws/positions/*", handler.NewWebSocketProxy("http://host.docker.internal:8081"))
+		r.Handle("/positions/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
+		r.Handle("/api/v1/pnl/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
+		r.Handle("/api/v1/orders/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
+		r.Handle("/ws/positions/*", handler.NewWebSocketProxy(cfg.ExchangeURL))
 	})
 
 	log.Printf("Server starting on :%s", cfg.Port)
