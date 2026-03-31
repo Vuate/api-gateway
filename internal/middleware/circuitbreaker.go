@@ -54,6 +54,7 @@ func (cb *CircuitBreaker) onSuccess() {
 	defer cb.mu.Unlock()
 	cb.failures = 0
 	cb.state = stateClosed
+	SetCircuitBreakerOpen(cb.serviceName, false)
 }
 
 func (cb *CircuitBreaker) onFailure() {
@@ -63,6 +64,7 @@ func (cb *CircuitBreaker) onFailure() {
 	cb.lastFailureTime = time.Now()
 	if cb.failures >= cb.maxFailures {
 		cb.state = stateOpen
+		SetCircuitBreakerOpen(cb.serviceName, true)
 	}
 }
 

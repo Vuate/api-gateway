@@ -68,7 +68,7 @@ Environment variable ile yapılandırılır:
 | `PORT` | `9000` | Gateway'in dinlediği port |
 | `JWT_SECRET` | — | JWT doğrulama anahtarı |
 | `MARKET_DATA_URL` | ngrok URL | market-data servisinin adresi |
-| `EXCHANGE_URL` | `http://host.docker.internal:8081` | exchange-api servisinin adresi |
+| `EXCHANGE_URL` | `https://contextured-tora-nontribally.ngrok-free.dev` | exchange-api servisinin adresi |
 
 ## Dosya Yapısı
 
