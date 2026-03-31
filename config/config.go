@@ -24,7 +24,7 @@ func Load() *Config {
 
 	exchangeURL := os.Getenv("EXCHANGE_URL")
 	if exchangeURL == "" {
-		exchangeURL = "http://host.docker.internal:8081"
+		exchangeURL = "https://contextured-tora-nontribally.ngrok-free.dev"
 	}
 
 	return &Config{

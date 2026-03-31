@@ -9,6 +9,7 @@ import (
 	apimiddleware "github.com/Vuate/api-gateway/internal/middleware"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -20,15 +21,23 @@ func main() {
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(rateLimiter.Middleware)
+	r.Use(apimiddleware.Metrics)
 
 	r.Get("/health", handler.Health(cfg))
+	r.Handle("/metrics", promhttp.Handler())
 
+	// Her downstream servis icin bagimsiz circuit breaker
 	marketDataCB := apimiddleware.NewCircuitBreaker("market-data")
 	exchangeCB := apimiddleware.NewCircuitBreaker("exchange")
 
 	// Public — JWT gerekmez
 	r.Handle("/api/v1/quotes/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+	r.Handle("/api/v1/ohlcv/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+	r.Handle("/api/v1/funding-rate/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+	
+	// WebSocket — circuit breaker gecerli degil, dogrudan proxy
 	r.Handle("/ws/quotes/*", handler.NewWebSocketProxy(cfg.MarketDataURL))
+
 
 	// Protected — JWT zorunlu
 	r.Group(func(r chi.Router) {
@@ -36,6 +45,9 @@ func main() {
 		r.Handle("/positions/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
 		r.Handle("/api/v1/pnl/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
 		r.Handle("/api/v1/orders/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
+		r.Handle("/api/v1/dca/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
+		r.Handle("/api/v1/risk/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
+		// WebSocket — JWT dogrulandiktan sonra proxy'e iletilir
 		r.Handle("/ws/positions/*", handler.NewWebSocketProxy(cfg.ExchangeURL))
 	})
 

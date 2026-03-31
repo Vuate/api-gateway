@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"net"
 	"net/http"
 	"sync"
 	"time"
@@ -61,9 +62,12 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 		ip := r.RemoteAddr
 		if forwarded := r.Header.Get("X-Forwarded-For"); forwarded != "" {
 			ip = forwarded
+		} else if host, _, err := net.SplitHostPort(ip); err == nil {
+			ip = host
 		}
 
 		if !rl.getVisitor(ip).Allow() {
+			RecordRateLimitHit()
 			http.Error(w, `{"error":"too many requests"}`, http.StatusTooManyRequests)
 			return
 		}
