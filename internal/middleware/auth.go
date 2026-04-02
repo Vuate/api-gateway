@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strings"
+	"fmt"
 
 	"github.com/golang-jwt/jwt/v5"
 )
@@ -41,11 +42,16 @@ func JWTAuth(secret string) func(http.Handler) http.Handler {
 				return
 			}
 
-			userID, ok := claims["id"].(string)
-			if !ok || userID == "" {
-				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
-				return
-			}
+				userIDFloat, ok := claims["user_id"].(float64)
+				if !ok {
+					http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+					return
+				}
+				userID := fmt.Sprintf("%d", int64(userIDFloat))
+				if userID == "" {
+					http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+					return
+				}
 
 			r.Header.Set("X-User-ID", userID)
 			ctx := context.WithValue(r.Context(), UserIDKey, userID)
