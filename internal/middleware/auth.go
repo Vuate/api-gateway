@@ -14,7 +14,11 @@ type contextKey string
 const UserIDKey contextKey = "userID"
 
 func JWTAuth(secret string) func(http.Handler) http.Handler {
+	if secret == "" {
+		secret = "default-secret-change-in-production"
+	}
 	return func(next http.Handler) http.Handler {
+
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			authHeader := r.Header.Get("Authorization")
 			if !strings.HasPrefix(authHeader, "Bearer ") {
