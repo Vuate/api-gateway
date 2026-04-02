@@ -9,7 +9,6 @@ type Config struct {
 	JWTSecret     string
 	MarketDataURL string
 	ExchangeURL   string
-	AuthURL       string
 }
 
 func Load() *Config {
@@ -28,16 +27,10 @@ func Load() *Config {
 		exchangeURL = "https://contextured-tora-nontribally.ngrok-free.dev"
 	}
 
-	authURL := os.Getenv("AUTH_URL")
-	if authURL == "" {
-		authURL = "http://auth-service:8082"
-	}
-
 	return &Config{
 		Port:          port,
 		JWTSecret:     os.Getenv("JWT_SECRET"),
 		MarketDataURL: marketDataURL,
 		ExchangeURL:   exchangeURL,
-		AuthURL:       authURL,
 	}
 }
