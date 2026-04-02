@@ -43,11 +43,9 @@ func main() {
 	// Her downstream servis icin bagimsiz circuit breaker
 	marketDataCB := apimiddleware.NewCircuitBreaker("market-data")
 	exchangeCB := apimiddleware.NewCircuitBreaker("exchange")
-	authCB := apimiddleware.NewCircuitBreaker("auth")
 
 	// Auth — JWT gerekmez
-	r.Handle("/api/v1/auth/login", authCB.Wrap(handler.NewProxy(cfg.AuthURL)))
-	r.Handle("/api/v1/auth/register", authCB.Wrap(handler.NewProxy(cfg.AuthURL)))
+	r.Handle("/api/v1/auth/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
 
 	// Public — JWT gerekmez
 	r.Handle("/api/v1/quotes/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
