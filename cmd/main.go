@@ -3,6 +3,8 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
+	"strconv"
 
 	"github.com/Vuate/api-gateway/config"
 	"github.com/Vuate/api-gateway/internal/handler"
@@ -15,7 +17,19 @@ import (
 func main() {
 	cfg := config.Load()
 
-	rateLimiter := apimiddleware.NewRateLimiter(10, 30) // saniyede 10 istek, 30 burst
+	rps := 10.0
+	burst := 30
+	if v := os.Getenv("RATE_LIMIT_RPS"); v != "" {
+		if parsed, err := strconv.ParseFloat(v, 64); err == nil {
+			rps = parsed
+		}
+	}
+	if v := os.Getenv("RATE_LIMIT_BURST"); v != "" {
+		if parsed, err := strconv.Atoi(v); err == nil {
+			burst = parsed
+		}
+	}
+	rateLimiter := apimiddleware.NewRateLimiter(rps, burst)
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
@@ -29,6 +43,11 @@ func main() {
 	// Her downstream servis icin bagimsiz circuit breaker
 	marketDataCB := apimiddleware.NewCircuitBreaker("market-data")
 	exchangeCB := apimiddleware.NewCircuitBreaker("exchange")
+	authCB := apimiddleware.NewCircuitBreaker("auth")
+
+	// Auth — JWT gerekmez
+	r.Handle("/api/v1/auth/login", authCB.Wrap(handler.NewProxy(cfg.AuthURL)))
+	r.Handle("/api/v1/auth/register", authCB.Wrap(handler.NewProxy(cfg.AuthURL)))
 
 	// Public — JWT gerekmez
 	r.Handle("/api/v1/quotes/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
