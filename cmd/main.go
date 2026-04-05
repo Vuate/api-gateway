@@ -78,6 +78,10 @@ func main() {
 		r.Handle("/api/v1/risk/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
 		r.Handle("/api/v1/apikeys/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
         r.Handle("/api/v1/apikeys", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
+		r.Handle("/api/v1/alerts", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
+        r.Handle("/api/v1/alerts/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
+		r.Handle("/api/v1/position/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
+        r.Handle("/api/v1/portfolio/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
 
 		// WebSocket — JWT dogrulandiktan sonra proxy'e iletilir
 		r.Handle("/ws/positions/*", handler.NewWebSocketProxy(cfg.ExchangeURL))
