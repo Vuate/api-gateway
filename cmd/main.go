@@ -36,6 +36,7 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(rateLimiter.Middleware)
 	r.Use(apimiddleware.Metrics)
+	r.Use(apimiddleware.RequestLogger)
 
 	r.Get("/health", handler.Health(cfg))
 	r.Handle("/metrics", promhttp.Handler())
@@ -55,6 +56,12 @@ func main() {
 	r.Handle("/api/v1/compare/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
 	r.Handle("/api/v1/funding/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
 	r.Handle("/api/v1/spread/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+
+	// Order Book Gateway
+	r.Handle("/api/v1/orderbook/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+	r.Handle("/api/v1/liquidity/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+	r.Handle("/api/v1/slippage/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+	r.Handle("/api/v1/rsi/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
 
 	// WebSocket — circuit breaker gecerli degil, dogrudan proxy
 	r.Handle("/ws/quotes/*", handler.NewWebSocketProxy(cfg.MarketDataURL))
