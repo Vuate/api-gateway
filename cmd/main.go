@@ -12,6 +12,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	httpSwagger "github.com/swaggo/http-swagger"
+
 )
 
 func main() {
@@ -32,6 +34,12 @@ func main() {
 	rateLimiter := apimiddleware.NewRateLimiter(rps, burst)
 
 	r := chi.NewRouter()
+	r.Use(func(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+        w.Header().Set("Access-Control-Allow-Origin", "*")
+        next.ServeHTTP(w, req)
+    })
+})
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
 	r.Use(rateLimiter.Middleware)
@@ -39,6 +47,10 @@ func main() {
 	r.Use(apimiddleware.RequestLogger)
 
 	r.Get("/health", handler.Health(cfg))
+	r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL("/swagger/doc.yaml")))
+	r.Get("/swagger/doc.yaml", func(w http.ResponseWriter, req *http.Request) {
+    http.ServeFile(w, req, "docs/swagger.yaml")
+})
 	r.Handle("/metrics", promhttp.Handler())
 
 	// Her downstream servis icin bagimsiz circuit breaker
@@ -65,6 +77,7 @@ func main() {
 
 	// WebSocket — circuit breaker gecerli degil, dogrudan proxy
 	r.Handle("/ws/quotes/*", handler.NewWebSocketProxy(cfg.MarketDataURL))
+	r.Handle("/ws/orderbook", handler.NewWebSocketProxy(cfg.MarketDataURL))
 
 
 	// Protected — JWT zorunlu
