@@ -159,6 +159,24 @@ paths:
         "200":
           description: OK
 
+  /api/v1/auth/register:
+    post:
+      summary: Kayıt ol
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                email:
+                  type: string
+                password:
+                  type: string
+      responses:
+        "200":
+          description: JWT token döner
+
   /api/v1/auth/login:
     post:
       summary: Giriş yap (JWT alır)
@@ -177,6 +195,163 @@ paths:
         "200":
           description: JWT token döner
 
+  /api/v1/alerts/:
+    get:
+      summary: Alert listesi (JWT gerekli)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /api/v1/alerts:
+    post:
+      summary: Alert oluştur (JWT gerekli)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                symbol:
+                  type: string
+                condition:
+                  type: string
+                  enum: [above, below]
+                target:
+                  type: number
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /api/v1/alerts/delete/{id}:
+    delete:
+      summary: Alert sil (JWT gerekli)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /api/v1/apikeys:
+    post:
+      summary: API key kaydet (JWT gerekli)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                userId:
+                  type: string
+                exchange:
+                  type: string
+                apiKey:
+                  type: string
+                secretKey:
+                  type: string
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /api/v1/apikeys/list/{userId}:
+    get:
+      summary: API key listesi (JWT gerekli)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /api/v1/apikeys/delete/{userId}/{exchange}:
+    delete:
+      summary: API key sil (JWT gerekli)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: exchange
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /api/v1/portfolio/value:
+    get:
+      summary: Portföy değeri (JWT gerekli)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /api/v1/portfolio/pnl:
+    get:
+      summary: Portföy PnL (JWT gerekli)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /api/v1/pnl/{userId}:
+    get:
+      summary: Gerçekleşmiş PnL (JWT gerekli)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
   /api/v1/orders:
     get:
       summary: Emirler (JWT gerekli)
@@ -188,17 +363,123 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/v1/portfolio/{id}:
-    get:
-      summary: Portfolio (JWT gerekli)
+  /api/v1/dca/calculate:
+    post:
+      summary: DCA hesapla (JWT gerekli)
       security:
         - bearerAuth: []
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                symbol:
+                  type: string
+                trades:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      price:
+                        type: number
+                      quantity:
+                        type: number
+                simulate_prices:
+                  type: array
+                  items:
+                    type: number
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /api/v1/risk/calculate:
+    post:
+      summary: Risk hesapla (JWT gerekli)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                account_size:
+                  type: number
+                risk_percent:
+                  type: number
+                entry:
+                  type: number
+                stop_loss:
+                  type: number
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /api/v1/position/cost:
+    post:
+      summary: Pozisyon maliyet hesapla (JWT gerekli)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                symbol:
+                  type: string
+                entry_price:
+                  type: number
+                quantity:
+                  type: number
+                side:
+                  type: string
+                  enum: [buy, sell]
+                exchange:
+                  type: string
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /api/v1/users/preferences:
+    get:
+      summary: Kullanıcı tercihleri (JWT gerekli)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /api/v1/users/preferences/update:
+    put:
+      summary: Kullanıcı tercihlerini güncelle (JWT gerekli)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                preferred_exchanges:
+                  type: array
+                  items:
+                    type: string
+                notifications_enabled:
+                  type: boolean
       responses:
         "200":
           description: OK
