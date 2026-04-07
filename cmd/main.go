@@ -13,7 +13,6 @@ import (
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	httpSwagger "github.com/swaggo/http-swagger"
-
 )
 
 func main() {
@@ -95,6 +94,8 @@ func main() {
         r.Handle("/api/v1/alerts/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
 		r.Handle("/api/v1/position/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
         r.Handle("/api/v1/portfolio/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
+		r.Handle("/api/v1/users/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
+
 
 		// WebSocket — JWT dogrulandiktan sonra proxy'e iletilir
 		r.Handle("/ws/positions/*", handler.NewWebSocketProxy(cfg.ExchangeURL))
