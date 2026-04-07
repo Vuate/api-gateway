@@ -159,6 +159,34 @@ paths:
         "200":
           description: OK
 
+  /api/v1/compare/{symbol}:
+    get:
+      summary: Borsalar arası fiyat karşılaştırması
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+          example: BTCUSDT
+      responses:
+        "200":
+          description: OK
+
+  /api/v1/funding/{symbol}:
+    get:
+      summary: Futures funding rate (3 borsadan)
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+          example: BTCUSDT
+      responses:
+        "200":
+          description: OK
+
   /api/v1/auth/register:
     post:
       summary: Kayıt ol
@@ -195,7 +223,7 @@ paths:
         "200":
           description: JWT token döner
 
-  /api/v1/alerts/:
+  /api/v1/alerts:
     get:
       summary: Alert listesi (JWT gerekli)
       security:
