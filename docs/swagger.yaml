@@ -233,8 +233,6 @@ paths:
           description: OK
         "401":
           description: Unauthorized
-
-  /api/v1/alerts:
     post:
       summary: Alert oluştur (JWT gerekli)
       security:
@@ -511,6 +509,131 @@ paths:
       responses:
         "200":
           description: OK
+        "401":
+          description: Unauthorized
+
+  /api/v1/efficiency/{symbol}:
+    get:
+      summary: Piyasa verimliliği (market-data)
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+          example: BTCUSDT
+      responses:
+        "200":
+          description: OK
+
+  /api/v1/apikeys/{userId}/{exchange}:
+    get:
+      summary: Borsaya ait API key getir (JWT gerekli)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: exchange
+          in: path
+          required: true
+          schema:
+            type: string
+          example: binance
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /api/v1/pnl/chart/{userId}:
+    get:
+      summary: PnL grafik verisi (JWT gerekli)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /positions/{userId}:
+    get:
+      summary: Kullanıcının pozisyonları - spot + futures (JWT gerekli)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /api/v1/trades/{userId}:
+    get:
+      summary: Trade geçmişi (JWT gerekli)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /api/v1/performance:
+    get:
+      summary: Kullanıcı performans istatistikleri (JWT gerekli)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Win rate, PnL, best/worst trade
+        "401":
+          description: Unauthorized
+
+  /api/v1/staking:
+    get:
+      summary: Stake pozisyonları - Binance, OKX, Bybit (JWT gerekli)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /api/v1/ws:
+    get:
+      summary: WebSocket — alert bildirimleri (JWT gerekli)
+      description: |
+        WebSocket bağlantısı. Alert tetiklenince anlık push gelir.
+        Bağlantı: ws://localhost:9000/api/v1/ws
+        Header: Authorization: Bearer <token>
+      security:
+        - bearerAuth: []
+      responses:
+        "101":
+          description: Switching Protocols
         "401":
           description: Unauthorized
 
