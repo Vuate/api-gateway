@@ -73,6 +73,7 @@ func main() {
 	r.Handle("/api/v1/compare/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
 	r.Handle("/api/v1/funding/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
 	r.Handle("/api/v1/spread/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+	r.Handle("/api/v1/efficiency/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
 
 	// Order Book Gateway
 	r.Handle("/api/v1/orderbook/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
@@ -101,10 +102,12 @@ func main() {
 		r.Handle("/api/v1/position/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
         r.Handle("/api/v1/portfolio/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
 		r.Handle("/api/v1/users/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
-
+		r.Handle("/api/v1/performance", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
+		r.Handle("/api/v1/staking", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
 
 		// WebSocket — JWT dogrulandiktan sonra proxy'e iletilir
 		r.Handle("/ws/positions/*", handler.NewWebSocketProxy(cfg.ExchangeURL))
+		r.Handle("/api/v1/ws", handler.NewWebSocketProxy(cfg.ExchangeURL))
 	})
 
 	log.Printf("Server starting on :%s", cfg.Port)
