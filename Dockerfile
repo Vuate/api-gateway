@@ -5,7 +5,7 @@ RUN go mod download
 COPY . .
 RUN go build -o api-gateway ./cmd/main.go
 
-FROM alpine:latest
+FROM alpine:3.23
 WORKDIR /root/
 COPY --from=builder /app/api-gateway .
 COPY --from=builder /app/docs ./docs
