@@ -14,6 +14,43 @@ paths:
         "200":
           description: OK
 
+  /ws:
+    get:
+      summary: Public WebSocket bağlantısı (market data)
+      description: |
+        WebSocket bağlantısı. Market data stream için.
+        Bağlantı: ws://localhost:9000/ws
+      responses:
+        "101":
+          description: Switching Protocols
+
+  /ws/quotes/{symbol}:
+    get:
+      summary: Anlık fiyat stream (WebSocket)
+      description: |
+        WebSocket bağlantısı. Sembol bazlı anlık fiyat akışı.
+        Bağlantı: ws://localhost:9000/ws/quotes/{symbol}
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+          example: BTCUSDT
+      responses:
+        "101":
+          description: Switching Protocols
+
+  /ws/orderbook:
+    get:
+      summary: Order book stream (WebSocket)
+      description: |
+        WebSocket bağlantısı. Anlık order book akışı.
+        Bağlantı: ws://localhost:9000/ws/orderbook
+      responses:
+        "101":
+          description: Switching Protocols
+
   /api/v1/quotes/{symbol}:
     get:
       summary: Anlık fiyat
@@ -24,6 +61,30 @@ paths:
           schema:
             type: string
           example: BTCUSDT
+      responses:
+        "200":
+          description: OK
+
+  /api/v1/history/{symbol}:
+    get:
+      summary: Fiyat geçmişi
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+          example: BTCUSDT
+        - name: interval
+          in: query
+          schema:
+            type: string
+          example: 1d
+        - name: limit
+          in: query
+          schema:
+            type: integer
+          example: 30
       responses:
         "200":
           description: OK
@@ -224,15 +285,6 @@ paths:
           description: JWT token döner
 
   /api/v1/alerts:
-    get:
-      summary: Alert listesi (JWT gerekli)
-      security:
-        - bearerAuth: []
-      responses:
-        "200":
-          description: OK
-        "401":
-          description: Unauthorized
     post:
       summary: Alert oluştur (JWT gerekli)
       security:
@@ -257,17 +309,34 @@ paths:
         "401":
           description: Unauthorized
 
-  /api/v1/alerts/delete/{id}:
+  /api/v1/alerts/{userId}:
+    get:
+      summary: Alert listesi (JWT gerekli)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /api/v1/alerts/delete/{userId}:
     delete:
       summary: Alert sil (JWT gerekli)
       security:
         - bearerAuth: []
       parameters:
-        - name: id
+        - name: userId
           in: path
           required: true
           schema:
-            type: integer
+            type: string
       responses:
         "200":
           description: OK
@@ -300,6 +369,23 @@ paths:
         "401":
           description: Unauthorized
 
+  /api/v1/apikeys/{userId}:
+    get:
+      summary: Kullanıcının tüm API key'leri (JWT gerekli)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
   /api/v1/apikeys/list/{userId}:
     get:
       summary: API key listesi (JWT gerekli)
@@ -319,7 +405,7 @@ paths:
 
   /api/v1/apikeys/delete/{userId}/{exchange}:
     delete:
-      summary: API key sil (JWT gerekli)
+      summary: Borsaya ait API key sil (JWT gerekli)
       security:
         - bearerAuth: []
       parameters:
@@ -329,6 +415,23 @@ paths:
           schema:
             type: string
         - name: exchange
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /api/v1/apikeys/delete/{userId}:
+    delete:
+      summary: Kullanıcının tüm API key'lerini sil (JWT gerekli)
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
           in: path
           required: true
           schema:
@@ -383,6 +486,73 @@ paths:
       summary: Emirler (JWT gerekli)
       security:
         - bearerAuth: []
+      parameters:
+        - name: symbol
+          in: query
+          schema:
+            type: string
+          example: BTCUSDT
+        - name: limit
+          in: query
+          schema:
+            type: integer
+          example: 20
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /api/v1/orders/spot:
+    post:
+      summary: Spot emir gönder (JWT gerekli)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                symbol:
+                  type: string
+                side:
+                  type: string
+                  enum: [buy, sell]
+                quantity:
+                  type: number
+                price:
+                  type: number
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /api/v1/orders/futures:
+    post:
+      summary: Futures emir gönder (JWT gerekli)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                symbol:
+                  type: string
+                side:
+                  type: string
+                  enum: [long, short]
+                quantity:
+                  type: number
+                leverage:
+                  type: integer
+                price:
+                  type: number
       responses:
         "200":
           description: OK
@@ -489,7 +659,7 @@ paths:
           description: Unauthorized
 
   /api/v1/users/preferences/update:
-    put:
+    post:
       summary: Kullanıcı tercihlerini güncelle (JWT gerekli)
       security:
         - bearerAuth: []
@@ -522,6 +692,125 @@ paths:
           schema:
             type: string
           example: BTCUSDT
+      responses:
+        "200":
+          description: OK
+
+  /api/v1/news:
+    get:
+      summary: Kripto haberleri
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+          example: 20
+        - name: symbol
+          in: query
+          schema:
+            type: string
+          example: BTC
+      responses:
+        "200":
+          description: OK
+
+  /api/v1/ico-calendar:
+    get:
+      summary: ICO takvimi
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [upcoming, active, ended]
+          example: upcoming
+      responses:
+        "200":
+          description: OK
+
+  /api/v1/etf-flows:
+    get:
+      summary: Bitcoin ETF fon akışları
+      parameters:
+        - name: period
+          in: query
+          schema:
+            type: string
+          example: 7d
+      responses:
+        "200":
+          description: OK
+
+  /api/v1/whale-alerts:
+    get:
+      summary: Whale (balina) işlem uyarıları
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+          example: 20
+        - name: min_value
+          in: query
+          schema:
+            type: number
+          example: 1000000
+      responses:
+        "200":
+          description: OK
+
+  /api/v1/fees:
+    get:
+      summary: Borsa işlem ücretleri karşılaştırması
+      parameters:
+        - name: exchange
+          in: query
+          schema:
+            type: string
+          example: binance
+      responses:
+        "200":
+          description: OK
+
+  /api/v1/all-in-cost/{symbol}:
+    get:
+      summary: Toplam maliyet hesabı (spread + fee + slippage)
+      parameters:
+        - name: symbol
+          in: path
+          required: true
+          schema:
+            type: string
+          example: BTCUSDT
+        - name: exchange
+          in: query
+          schema:
+            type: string
+          example: binance
+        - name: size
+          in: query
+          schema:
+            type: number
+          example: 10000
+      responses:
+        "200":
+          description: OK
+
+  /api/v1/wallet/{address}:
+    get:
+      summary: Cüzdan bakiyesi ve işlem geçmişi
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+          example: "0xabc123..."
+        - name: chain
+          in: query
+          schema:
+            type: string
+          example: ethereum
       responses:
         "200":
           description: OK
@@ -613,7 +902,7 @@ paths:
 
   /api/v1/staking:
     get:
-      summary: Stake pozisyonları - Binance, OKX, Bybit (JWT gerekli)
+      summary: Tüm exchange staking pozisyonları (JWT gerekli)
       security:
         - bearerAuth: []
       responses:
@@ -622,12 +911,108 @@ paths:
         "401":
           description: Unauthorized
 
+  /api/v1/staking/apr:
+    get:
+      summary: APR karşılaştırma - exchange bazlı (JWT gerekli)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /api/v1/staking/rewards:
+    get:
+      summary: Staking ödül takvimi (JWT gerekli)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /api/v1/stacks:
+    get:
+      summary: Kategori bazlı pozisyon gruplandırma (JWT gerekli)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OK
+        "401":
+          description: Unauthorized
+
+  /ws/positions/{userId}:
+    get:
+      summary: Pozisyon stream (WebSocket, JWT gerekli)
+      description: |
+        WebSocket bağlantısı. Kullanıcının açık pozisyonlarını anlık izler.
+        Bağlantı: ws://localhost:9000/ws/positions/{userId}
+        Header: Authorization: Bearer <token>
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: userId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "101":
+          description: Switching Protocols
+        "401":
+          description: Unauthorized
+
   /api/v1/ws:
     get:
-      summary: WebSocket — alert bildirimleri (JWT gerekli)
+      summary: Genel WebSocket bağlantısı (JWT gerekli)
       description: |
         WebSocket bağlantısı. Alert tetiklenince anlık push gelir.
         Bağlantı: ws://localhost:9000/api/v1/ws
+        Header: Authorization: Bearer <token>
+      security:
+        - bearerAuth: []
+      responses:
+        "101":
+          description: Switching Protocols
+        "401":
+          description: Unauthorized
+
+  /api/v1/ws/pnl:
+    get:
+      summary: Canlı PnL güncellemesi WebSocket (JWT gerekli, 5sn)
+      description: |
+        Bağlantı: ws://localhost:9000/api/v1/ws/pnl
+        Header: Authorization: Bearer <token>
+      security:
+        - bearerAuth: []
+      responses:
+        "101":
+          description: Switching Protocols
+        "401":
+          description: Unauthorized
+
+  /api/v1/ws/futures:
+    get:
+      summary: Canlı futures pozisyonları WebSocket (JWT gerekli, 5sn)
+      description: |
+        Bağlantı: ws://localhost:9000/api/v1/ws/futures
+        Header: Authorization: Bearer <token>
+      security:
+        - bearerAuth: []
+      responses:
+        "101":
+          description: Switching Protocols
+        "401":
+          description: Unauthorized
+
+  /api/v1/ws/spot:
+    get:
+      summary: Canlı spot pozisyonları WebSocket (JWT gerekli, 5sn)
+      description: |
+        Bağlantı: ws://localhost:9000/api/v1/ws/spot
         Header: Authorization: Bearer <token>
       security:
         - bearerAuth: []
