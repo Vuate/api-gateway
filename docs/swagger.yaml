@@ -354,35 +354,20 @@ paths:
           application/json:
             schema:
               type: object
+              required: [exchange, api_key, secret_key]
               properties:
-                userId:
-                  type: string
                 exchange:
                   type: string
-                apiKey:
+                  example: binance
+                api_key:
                   type: string
-                secretKey:
+                  example: your_api_key
+                secret_key:
                   type: string
+                  example: your_secret_key
       responses:
-        "200":
-          description: OK
-        "401":
-          description: Unauthorized
-
-  /api/v1/apikeys/{userId}:
-    get:
-      summary: Kullanıcının tüm API key'leri (JWT gerekli)
-      security:
-        - bearerAuth: []
-      parameters:
-        - name: userId
-          in: path
-          required: true
-          schema:
-            type: string
-      responses:
-        "200":
-          description: OK
+        "201":
+          description: API key kaydedildi
         "401":
           description: Unauthorized
 
