@@ -54,6 +54,13 @@ func NewWebSocketProxy(target string) http.Handler {
 				upstreamHeader[k] = vals
 			}
 		}
+		// Token query param'dan geldiyse (WebSocket tarayıcı header gönderemiyor)
+		// upstream'e Authorization header olarak ilet
+		if upstreamHeader.Get("Authorization") == "" {
+			if token := r.URL.Query().Get("token"); token != "" {
+				upstreamHeader.Set("Authorization", "Bearer "+token)
+			}
+		}
 		// ngrok browser uyarı sayfasını atla
 		upstreamHeader.Set("ngrok-skip-browser-warning", "true")
 
