@@ -2,7 +2,7 @@
 
 | Proje | Servis | Dil / Runtime | Son Güncelleme |
 |---|---|---|---|
-| Tresaurio Kripto Portföy Yönetim Platformu | api-gateway | Go 1.26 | 2026-04-10 |
+| Tresaurio Kripto Portföy Yönetim Platformu | api-gateway | Go 1.26 | 2026-04-13 |
 
 ---
 
@@ -267,42 +267,73 @@ Client ──── ws/wss ────► api-gateway ──── ws/wss ─�
 
 ## 4. Route Tablosu
 
-| Method | Path | Auth | Downstream | Circuit Breaker |
-|---|---|---|---|---|
-| `GET` | `/health` | — | market-data + exchange | — |
-| `GET` | `/swagger/*` | — | — (yerel) | — |
-| `GET` | `/swagger/doc.yaml` | — | — (yerel) | — |
-| `ANY` | `/api/v1/quotes/*` | — | market-data | market-data CB |
-| `ANY` | `/api/v1/ohlcv/*` | — | market-data | market-data CB |
-| `ANY` | `/api/v1/orderbook/*` | — | market-data | market-data CB |
-| `ANY` | `/api/v1/liquidity/*` | — | market-data | market-data CB |
-| `ANY` | `/api/v1/slippage/*` | — | market-data | market-data CB |
-| `ANY` | `/api/v1/rsi/*` | — | market-data | market-data CB |
-| `ANY` | `/api/v1/spread/*` | — | market-data | market-data CB |
-| `ANY` | `/api/v1/funding-rate/*` | — | market-data | market-data CB |
-| `ANY` | `/api/v1/funding/*` | — | market-data | market-data CB |
-| `ANY` | `/api/v1/compare/*` | — | market-data | market-data CB |
-| `ANY` | `/api/v1/efficiency/*` | — | market-data | market-data CB |
-| `WS` | `/ws/quotes/*` | — | market-data | — |
-| `WS` | `/ws/orderbook` | — | market-data | — |
-| `ANY` | `/api/v1/auth/*` | — | exchange-service | exchange CB |
-| `ANY` | `/positions/*` | JWT | exchange-service | exchange CB |
-| `ANY` | `/api/v1/pnl/*` | JWT | exchange-service | exchange CB |
-| `ANY` | `/api/v1/orders/*` | JWT | exchange-service | exchange CB |
-| `ANY` | `/api/v1/trades/*` | JWT | exchange-service | exchange CB |
-| `ANY` | `/api/v1/dca/*` | JWT | exchange-service | exchange CB |
-| `ANY` | `/api/v1/risk/*` | JWT | exchange-service | exchange CB |
-| `ANY` | `/api/v1/apikeys` | JWT | exchange-service | exchange CB |
-| `ANY` | `/api/v1/apikeys/*` | JWT | exchange-service | exchange CB |
-| `ANY` | `/api/v1/alerts` | JWT | exchange-service | exchange CB |
-| `ANY` | `/api/v1/alerts/*` | JWT | exchange-service | exchange CB |
-| `ANY` | `/api/v1/position/*` | JWT | exchange-service | exchange CB |
-| `ANY` | `/api/v1/portfolio/*` | JWT | exchange-service | exchange CB |
-| `ANY` | `/api/v1/users/*` | JWT | exchange-service | exchange CB |
-| `GET` | `/api/v1/performance` | JWT | exchange-service | exchange CB |
-| `GET` | `/api/v1/staking` | JWT | exchange-service | exchange CB |
-| `WS` | `/ws/positions/*` | JWT | exchange-service | — |
-| `WS` | `/api/v1/ws` | JWT | exchange-service | — |
+### Gateway Sistem Endpoint'leri
+
+| Method | Path | Auth | Açıklama |
+|---|---|---|---|
+| `GET` | `/health` | — | Downstream servis durumu aggregation |
+| `GET` | `/swagger/*` | — | Swagger UI |
+| `GET` | `/swagger/doc.yaml` | — | OpenAPI YAML tanım dosyası |
+| `GET` | `/metrics` | — | Prometheus metrik endpoint'i |
+
+### market-data — Public (JWT Gerektirmez)
+
+| Method | Path | Circuit Breaker |
+|---|---|---|
+| `ANY` | `/api/v1/quotes/*` | market-data CB |
+| `ANY` | `/api/v1/history/*` | market-data CB |
+| `ANY` | `/api/v1/ohlcv/*` | market-data CB |
+| `ANY` | `/api/v1/compare/*` | market-data CB |
+| `ANY` | `/api/v1/funding/*` | market-data CB |
+| `ANY` | `/api/v1/funding-rate/*` | market-data CB |
+| `ANY` | `/api/v1/spread/*` | market-data CB |
+| `ANY` | `/api/v1/efficiency/*` | market-data CB |
+| `ANY` | `/api/v1/orderbook/*` | market-data CB |
+| `ANY` | `/api/v1/liquidity/*` | market-data CB |
+| `ANY` | `/api/v1/slippage/*` | market-data CB |
+| `ANY` | `/api/v1/rsi/*` | market-data CB |
+| `ANY` | `/api/v1/news` | market-data CB |
+| `ANY` | `/api/v1/ico-calendar` | market-data CB |
+| `ANY` | `/api/v1/etf-flows` | market-data CB |
+| `ANY` | `/api/v1/whale-alerts` | market-data CB |
+| `ANY` | `/api/v1/fees` | market-data CB |
+| `ANY` | `/api/v1/all-in-cost/*` | market-data CB |
+| `ANY` | `/api/v1/wallet/*` | market-data CB |
+| `WS` | `/ws` | — |
+| `WS` | `/ws/quotes/*` | — |
+| `WS` | `/ws/orderbook` | — |
+
+### exchange-service — Public (JWT Gerektirmez)
+
+| Method | Path | Circuit Breaker |
+|---|---|---|
+| `ANY` | `/api/v1/auth/*` | exchange CB |
+
+### exchange-service — Protected (JWT Zorunlu)
+
+| Method | Path | Circuit Breaker |
+|---|---|---|
+| `ANY` | `/positions/*` | exchange CB |
+| `ANY` | `/api/v1/portfolio/*` | exchange CB |
+| `ANY` | `/api/v1/pnl/*` | exchange CB |
+| `ANY` | `/api/v1/trades/*` | exchange CB |
+| `ANY` | `/api/v1/orders` | exchange CB |
+| `ANY` | `/api/v1/orders/*` | exchange CB |
+| `ANY` | `/api/v1/apikeys` | exchange CB |
+| `ANY` | `/api/v1/apikeys/*` | exchange CB |
+| `ANY` | `/api/v1/alerts` | exchange CB |
+| `ANY` | `/api/v1/alerts/*` | exchange CB |
+| `ANY` | `/api/v1/dca/*` | exchange CB |
+| `ANY` | `/api/v1/risk/*` | exchange CB |
+| `ANY` | `/api/v1/position/*` | exchange CB |
+| `ANY` | `/api/v1/users/*` | exchange CB |
+| `GET` | `/api/v1/performance` | exchange CB |
+| `GET` | `/api/v1/staking` | exchange CB |
+| `ANY` | `/api/v1/staking/*` | exchange CB |
+| `GET` | `/api/v1/stacks` | exchange CB |
+| `WS` | `/ws/positions/*` | — |
+| `WS` | `/api/v1/ws` | — |
+| `WS` | `/api/v1/ws/*` | — |
 
 ---
 
@@ -447,4 +478,4 @@ go run ./cmd/main.go
 
 ---
 
-*Tresaurio Platform — api-gateway v0.6.0*
+*Tresaurio Platform — api-gateway v0.7.0*
