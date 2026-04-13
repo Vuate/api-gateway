@@ -514,16 +514,24 @@ paths:
           application/json:
             schema:
               type: object
+              required: [exchange, symbol, side, quantity]
               properties:
+                exchange:
+                  type: string
+                  example: binance
                 symbol:
                   type: string
+                  example: BTCUSDT
                 side:
                   type: string
                   enum: [buy, sell]
+                  example: buy
                 quantity:
                   type: number
+                  example: 0.001
                 price:
                   type: number
+                  example: 60000
       responses:
         "200":
           description: OK
@@ -541,18 +549,27 @@ paths:
           application/json:
             schema:
               type: object
+              required: [exchange, symbol, side, quantity]
               properties:
+                exchange:
+                  type: string
+                  example: binance
                 symbol:
                   type: string
+                  example: BTCUSDT
                 side:
                   type: string
                   enum: [long, short]
+                  example: long
                 quantity:
                   type: number
+                  example: 0.01
                 leverage:
                   type: integer
+                  example: 10
                 price:
                   type: number
+                  example: 60000
       responses:
         "200":
           description: OK
