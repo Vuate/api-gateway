@@ -3,8 +3,6 @@ package main
 import (
 	"log"
 	"net/http"
-	"os"
-	"strconv"
 
 	"github.com/Vuate/api-gateway/config"
 	"github.com/Vuate/api-gateway/internal/handler"
@@ -18,19 +16,9 @@ import (
 func main() {
 	cfg := config.Load()
 
-	rps := 10.0
-	burst := 30
-	if v := os.Getenv("RATE_LIMIT_RPS"); v != "" {
-		if parsed, err := strconv.ParseFloat(v, 64); err == nil {
-			rps = parsed
-		}
-	}
-	if v := os.Getenv("RATE_LIMIT_BURST"); v != "" {
-		if parsed, err := strconv.Atoi(v); err == nil {
-			burst = parsed
-		}
-	}
-	rateLimiter := apimiddleware.NewRateLimiter(cfg.RedisURL, rps, burst)
+	rlA := apimiddleware.NewRateLimiter(cfg.RedisURL, "groupA", 30)
+	rlB := apimiddleware.NewRateLimiter(cfg.RedisURL, "groupB", 5)
+	rlC := apimiddleware.NewRateLimiter(cfg.RedisURL, "groupC", 2)
 
 	r := chi.NewRouter()
 	r.Use(func(next http.Handler) http.Handler {
@@ -47,49 +35,57 @@ func main() {
 })
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
-	r.Use(rateLimiter.Middleware)
+	r.Use(apimiddleware.RequestID)
 	r.Use(apimiddleware.Metrics)
 	r.Use(apimiddleware.RequestLogger)
 
 	r.Get("/health", handler.Health(cfg))
 	r.Get("/swagger/*", httpSwagger.Handler(httpSwagger.URL("/swagger/doc.yaml")))
 	r.Get("/swagger/doc.yaml", func(w http.ResponseWriter, req *http.Request) {
-    http.ServeFile(w, req, "docs/swagger.yaml")
-})
+		http.ServeFile(w, req, "docs/swagger.yaml")
+	})
 	r.Handle("/metrics", promhttp.Handler())
 
 	// Her downstream servis icin bagimsiz circuit breaker
 	marketDataCB := apimiddleware.NewCircuitBreaker("market-data")
 	exchangeCB := apimiddleware.NewCircuitBreaker("exchange")
 
-	// Auth — JWT gerekmez
+	// Auth — JWT gerekmez, rate limit yok
 	r.Handle("/api/v1/auth/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
 
-	// Public — JWT gerekmez
-	r.Handle("/api/v1/quotes/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
-	r.Handle("/api/v1/history/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
-	r.Handle("/api/v1/ohlcv/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
-	r.Handle("/api/v1/funding-rate/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+	// Group A — 30 RPS per-IP: quotes / history / ohlcv / compare
+	r.Group(func(r chi.Router) {
+		r.Use(rlA.Middleware)
+		r.Handle("/api/v1/quotes/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+		r.Handle("/api/v1/history/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+		r.Handle("/api/v1/ohlcv/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+		r.Handle("/api/v1/compare/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+	})
 
-	r.Handle("/api/v1/compare/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
-	r.Handle("/api/v1/funding/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
-	r.Handle("/api/v1/spread/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
-	r.Handle("/api/v1/efficiency/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+	// Group B — 5 RPS per-IP: orderbook / spread / funding / slippage / liquidity / efficiency
+	r.Group(func(r chi.Router) {
+		r.Use(rlB.Middleware)
+		r.Handle("/api/v1/orderbook/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+		r.Handle("/api/v1/spread/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+		r.Handle("/api/v1/funding/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+		r.Handle("/api/v1/funding-rate/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+		r.Handle("/api/v1/slippage/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+		r.Handle("/api/v1/liquidity/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+		r.Handle("/api/v1/efficiency/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+		r.Handle("/api/v1/rsi/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+	})
 
-	// Order Book Gateway
-	r.Handle("/api/v1/orderbook/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
-	r.Handle("/api/v1/liquidity/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
-	r.Handle("/api/v1/slippage/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
-	r.Handle("/api/v1/rsi/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
-
-	// News & Market Intelligence
-	r.Handle("/api/v1/news", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
-	r.Handle("/api/v1/ico-calendar", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
-	r.Handle("/api/v1/etf-flows", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
-	r.Handle("/api/v1/whale-alerts", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
-	r.Handle("/api/v1/fees", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
-	r.Handle("/api/v1/all-in-cost/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
-	r.Handle("/api/v1/wallet/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+	// Group C — 2 RPS per-IP: whale-alerts / wallet / news / ico-calendar / etf-flows / fees
+	r.Group(func(r chi.Router) {
+		r.Use(rlC.Middleware)
+		r.Handle("/api/v1/whale-alerts", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+		r.Handle("/api/v1/wallet/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+		r.Handle("/api/v1/news", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+		r.Handle("/api/v1/ico-calendar", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+		r.Handle("/api/v1/etf-flows", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+		r.Handle("/api/v1/fees", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+		r.Handle("/api/v1/all-in-cost/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
+	})
 
 	// WebSocket — circuit breaker gecerli degil, dogrudan proxy
 	r.Handle("/ws", handler.NewWebSocketProxy(cfg.MarketDataURL))

@@ -30,12 +30,13 @@ return 0
 `)
 
 type RateLimiter struct {
-	client      *redis.Client
-	windowMs    int64
-	limit       int
+	client   *redis.Client
+	windowMs int64
+	limit    int
+	name     string
 }
 
-func NewRateLimiter(redisAddr string, rps float64, burst int) *RateLimiter {
+func NewRateLimiter(redisAddr string, name string, limit int) *RateLimiter {
 	client := redis.NewClient(&redis.Options{
 		Addr:         redisAddr,
 		DialTimeout:  2 * time.Second,
@@ -52,7 +53,8 @@ func NewRateLimiter(redisAddr string, rps float64, burst int) *RateLimiter {
 	return &RateLimiter{
 		client:   client,
 		windowMs: 1000,
-		limit:    burst,
+		limit:    limit,
+		name:     name,
 	}
 }
 
@@ -61,7 +63,7 @@ func (rl *RateLimiter) allow(ip string) bool {
 	defer cancel()
 
 	now := time.Now().UnixMilli()
-	key := "rl:" + ip
+	key := "rl:" + rl.name + ":" + ip
 
 	result, err := slidingWindowScript.Run(ctx, rl.client, []string{key},
 		strconv.FormatInt(now, 10),

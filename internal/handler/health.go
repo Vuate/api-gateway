@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
+	"sync"
 	"time"
 
 	"github.com/Vuate/api-gateway/config"
@@ -19,6 +21,8 @@ type healthResponse struct {
 	Services map[string]*serviceStatus `json:"services"`
 }
 
+const healthCheckTimeout = 3 * time.Second
+
 func Health(cfg *config.Config) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		upstreamServices := map[string]string{
@@ -26,20 +30,32 @@ func Health(cfg *config.Config) http.HandlerFunc {
 			"exchange":    cfg.ExchangeURL + "/health",
 		}
 
+		ctx, cancel := context.WithTimeout(r.Context(), healthCheckTimeout)
+		defer cancel()
+
 		resp := &healthResponse{
 			Status:   "ok",
 			Services: make(map[string]*serviceStatus),
 		}
 
-		client := &http.Client{Timeout: 3 * time.Second}
+		var wg sync.WaitGroup
+		var mu sync.Mutex
 
 		for name, url := range upstreamServices {
-			svc := checkService(client, url)
-			resp.Services[name] = svc
-			if svc.Status == "down" {
-				resp.Status = "degraded"
-			}
+			wg.Add(1)
+			go func(name, url string) {
+				defer wg.Done()
+				svc := checkService(ctx, url)
+				mu.Lock()
+				resp.Services[name] = svc
+				if svc.Status == "down" {
+					resp.Status = "degraded"
+				}
+				mu.Unlock()
+			}(name, url)
 		}
+
+		wg.Wait()
 
 		w.Header().Set("Content-Type", "application/json")
 		if resp.Status == "ok" {
@@ -51,14 +67,15 @@ func Health(cfg *config.Config) http.HandlerFunc {
 	}
 }
 
-func checkService(client *http.Client, url string) *serviceStatus {
+func checkService(ctx context.Context, url string) *serviceStatus {
 	start := time.Now()
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return &serviceStatus{Status: "down", Error: err.Error()}
 	}
 	req.Header.Set("ngrok-skip-browser-warning", "true")
 
+	client := &http.Client{}
 	res, err := client.Do(req)
 	if err != nil {
 		return &serviceStatus{Status: "down", Error: err.Error()}

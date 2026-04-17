@@ -20,7 +20,12 @@ func RequestLogger(next http.Handler) http.Handler {
 			userID = "-"
 		}
 
-		log.Printf("[%s] %s %s | status=%d | latency=%dms | ip=%s | user=%s",
+		requestID, _ := r.Context().Value(RequestIDKey).(string)
+		if requestID == "" {
+			requestID = "-"
+		}
+
+		log.Printf("[%s] %s %s | status=%d | latency=%dms | ip=%s | user=%s | request_id=%s",
 			time.Now().Format("2006-01-02 15:04:05"),
 			r.Method,
 			r.URL.Path,
@@ -28,6 +33,7 @@ func RequestLogger(next http.Handler) http.Handler {
 			time.Since(start).Milliseconds(),
 			r.RemoteAddr,
 			userID,
+			requestID,
 		)
 	})
 }
