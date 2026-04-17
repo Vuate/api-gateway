@@ -1,60 +1,79 @@
 package middleware
 
 import (
+	"context"
+	"log"
 	"net"
 	"net/http"
-	"sync"
+	"strconv"
 	"time"
 
-	"golang.org/x/time/rate"
+	"github.com/redis/go-redis/v9"
 )
 
-type visitor struct {
-	limiter  *rate.Limiter
-	lastSeen time.Time
-}
+// slidingWindowScript atomically checks and increments a sliding window counter.
+// Returns 1 if request is allowed, 0 if rate limit exceeded.
+var slidingWindowScript = redis.NewScript(`
+local key    = KEYS[1]
+local now    = tonumber(ARGV[1])
+local window = tonumber(ARGV[2])
+local limit  = tonumber(ARGV[3])
+
+redis.call('ZREMRANGEBYSCORE', key, 0, now - window)
+local count = redis.call('ZCARD', key)
+if count < limit then
+    redis.call('ZADD', key, now, now .. '-' .. math.random(1,1000000))
+    redis.call('PEXPIRE', key, window + 1000)
+    return 1
+end
+return 0
+`)
 
 type RateLimiter struct {
-	visitors map[string]*visitor
-	mu       sync.Mutex
-	rps      rate.Limit
-	burst    int
+	client      *redis.Client
+	windowMs    int64
+	limit       int
 }
 
-func NewRateLimiter(rps float64, burst int) *RateLimiter {
-	rl := &RateLimiter{
-		visitors: make(map[string]*visitor),
-		rps:      rate.Limit(rps),
-		burst:    burst,
+func NewRateLimiter(redisAddr string, rps float64, burst int) *RateLimiter {
+	client := redis.NewClient(&redis.Options{
+		Addr:         redisAddr,
+		DialTimeout:  2 * time.Second,
+		ReadTimeout:  1 * time.Second,
+		WriteTimeout: 1 * time.Second,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := client.Ping(ctx).Err(); err != nil {
+		log.Printf("WARNING: Redis connection failed (%v) — rate limiter will fail open", err)
 	}
-	go rl.cleanupLoop()
-	return rl
+
+	return &RateLimiter{
+		client:   client,
+		windowMs: 1000,
+		limit:    burst,
+	}
 }
 
-func (rl *RateLimiter) getVisitor(ip string) *rate.Limiter {
-	rl.mu.Lock()
-	defer rl.mu.Unlock()
+func (rl *RateLimiter) allow(ip string) bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
 
-	v, exists := rl.visitors[ip]
-	if !exists {
-		limiter := rate.NewLimiter(rl.rps, rl.burst)
-		rl.visitors[ip] = &visitor{limiter: limiter, lastSeen: time.Now()}
-		return limiter
-	}
-	v.lastSeen = time.Now()
-	return v.limiter
-}
+	now := time.Now().UnixMilli()
+	key := "rl:" + ip
 
-func (rl *RateLimiter) cleanupLoop() {
-	for range time.Tick(time.Minute) {
-		rl.mu.Lock()
-		for ip, v := range rl.visitors {
-			if time.Since(v.lastSeen) > 3*time.Minute {
-				delete(rl.visitors, ip)
-			}
-		}
-		rl.mu.Unlock()
+	result, err := slidingWindowScript.Run(ctx, rl.client, []string{key},
+		strconv.FormatInt(now, 10),
+		strconv.FormatInt(rl.windowMs, 10),
+		rl.limit,
+	).Int()
+	if err != nil {
+		// Fail open: Redis unavailable, let the request through
+		log.Printf("rate limiter redis error: %v", err)
+		return true
 	}
+	return result == 1
 }
 
 func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
@@ -66,7 +85,7 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 			ip = host
 		}
 
-		if !rl.getVisitor(ip).Allow() {
+		if !rl.allow(ip) {
 			RecordRateLimitHit()
 			http.Error(w, `{"error":"too many requests"}`, http.StatusTooManyRequests)
 			return
