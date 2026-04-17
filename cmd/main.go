@@ -30,7 +30,7 @@ func main() {
 			burst = parsed
 		}
 	}
-	rateLimiter := apimiddleware.NewRateLimiter(rps, burst)
+	rateLimiter := apimiddleware.NewRateLimiter(cfg.RedisURL, rps, burst)
 
 	r := chi.NewRouter()
 	r.Use(func(next http.Handler) http.Handler {
