@@ -35,6 +35,7 @@ func main() {
 })
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
+	r.Use(apimiddleware.RequestID)
 	r.Use(apimiddleware.Metrics)
 	r.Use(apimiddleware.RequestLogger)
 
