@@ -18,19 +18,14 @@ import (
 func main() {
 	cfg := config.Load()
 
-	rps := 10.0
-	burst := 30
-	if v := os.Getenv("RATE_LIMIT_RPS"); v != "" {
-		if parsed, err := strconv.ParseFloat(v, 64); err == nil {
-			rps = parsed
-		}
-	}
+	// RATE_LIMIT_BURST env var overrides the default max requests per second (default: 30)
+	limit := 30
 	if v := os.Getenv("RATE_LIMIT_BURST"); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil {
-			burst = parsed
+			limit = parsed
 		}
 	}
-	rateLimiter := apimiddleware.NewRateLimiter(cfg.RedisURL, rps, burst)
+	rateLimiter := apimiddleware.NewRateLimiter(cfg.RedisURL, "global", limit)
 
 	r := chi.NewRouter()
 	r.Use(func(next http.Handler) http.Handler {
