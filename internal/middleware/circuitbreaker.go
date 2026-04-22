@@ -6,6 +6,9 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -18,22 +21,65 @@ const (
 	stateHalfOpen              // test aşaması, servis düzeldi mi?
 )
 
+type CircuitBreakerConfig struct {
+	FailureThreshold int           // kaç 5xx sonra open
+	SuccessThreshold int           // half-open'dan closed için kaç başarı
+	Timeout          time.Duration // open → half-open bekleme süresi
+}
+
+func loadCBConfig(service string) CircuitBreakerConfig {
+	prefix := strings.ReplaceAll(strings.ToUpper(service), "-", "_")
+	return CircuitBreakerConfig{
+		FailureThreshold: getEnvInt(prefix+"_CB_FAILURE_THRESHOLD", 5),
+		SuccessThreshold: getEnvInt(prefix+"_CB_SUCCESS_THRESHOLD", 2),
+		Timeout:          getEnvDuration(prefix+"_CB_TIMEOUT", 30*time.Second),
+	}
+}
+
+func getEnvInt(key string, defaultVal int) int {
+	val := os.Getenv(key)
+	if val == "" {
+		return defaultVal
+	}
+	n, err := strconv.Atoi(val)
+	if err != nil {
+		return defaultVal
+	}
+	return n
+}
+
+func getEnvDuration(key string, defaultVal time.Duration) time.Duration {
+	val := os.Getenv(key)
+	if val == "" {
+		return defaultVal
+	}
+	d, err := time.ParseDuration(val)
+	if err != nil {
+		return defaultVal
+	}
+	return d
+}
+
 type CircuitBreaker struct {
-	mu              sync.Mutex
-	state           state
-	failures        int
-	maxFailures     int
-	timeout         time.Duration
-	lastFailureTime time.Time
-	serviceName     string
+	mu               sync.Mutex
+	state            state
+	failures         int
+	successes        int
+	maxFailures      int
+	successThreshold int
+	timeout          time.Duration
+	lastFailureTime  time.Time
+	serviceName      string
 }
 
 func NewCircuitBreaker(serviceName string) *CircuitBreaker {
+	cfg := loadCBConfig(serviceName)
 	return &CircuitBreaker{
-		state:       stateClosed,
-		maxFailures: 5,
-		timeout:     30 * time.Second,
-		serviceName: serviceName,
+		state:            stateClosed,
+		maxFailures:      cfg.FailureThreshold,
+		successThreshold: cfg.SuccessThreshold,
+		timeout:          cfg.Timeout,
+		serviceName:      serviceName,
 	}
 }
 
@@ -42,9 +88,9 @@ func (cb *CircuitBreaker) isOpen() bool {
 	defer cb.mu.Unlock()
 
 	if cb.state == stateOpen {
-		// 30 saniye geçtiyse half-open'a al, servisi test et
 		if time.Since(cb.lastFailureTime) > cb.timeout {
 			cb.state = stateHalfOpen
+			cb.successes = 0
 			return false
 		}
 		return true
@@ -55,9 +101,19 @@ func (cb *CircuitBreaker) isOpen() bool {
 func (cb *CircuitBreaker) onSuccess() {
 	cb.mu.Lock()
 	defer cb.mu.Unlock()
-	cb.failures = 0
-	cb.state = stateClosed
-	SetCircuitBreakerOpen(cb.serviceName, false)
+	if cb.state == stateHalfOpen {
+		cb.successes++
+		if cb.successes >= cb.successThreshold {
+			cb.failures = 0
+			cb.successes = 0
+			cb.state = stateClosed
+			SetCircuitBreakerOpen(cb.serviceName, false)
+		}
+	} else {
+		cb.failures = 0
+		cb.state = stateClosed
+		SetCircuitBreakerOpen(cb.serviceName, false)
+	}
 }
 
 func (cb *CircuitBreaker) onFailure() {
