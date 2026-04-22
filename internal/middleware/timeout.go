@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-// TimeoutMiddleware cancels the request context after the given duration.
-// Pass 0 to skip (used for WebSocket routes).
+// TimeoutMiddleware, isteği verilen süre sonunda iptal eder.
+// WebSocket route'larında timeout olmaması için 0 geçilir.
 func TimeoutMiddleware(timeout time.Duration) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

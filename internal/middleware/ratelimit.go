@@ -13,8 +13,8 @@ import (
 	"golang.org/x/time/rate"
 )
 
-// slidingWindowScript atomically checks and increments a sliding window counter.
-// Returns 1 if request is allowed, 0 if rate limit exceeded.
+// slidingWindowScript kayan pencere sayacını atomik olarak kontrol eder ve artırır.
+// İstek geçerliyse 1, limit aşıldıysa 0 döner.
 var slidingWindowScript = redis.NewScript(`
 local key    = KEYS[1]
 local now    = tonumber(ARGV[1])
@@ -37,7 +37,7 @@ type RateLimiter struct {
 	limit    int
 	name     string
 
-	// in-memory fallback when Redis is unavailable (degraded mode)
+	// Redis erişilemez olduğunda devreye giren in-memory yedek (degraded mode)
 	fallbackMu      sync.Mutex
 	fallbackLimiters map[string]*rate.Limiter
 }
@@ -65,7 +65,7 @@ func NewRateLimiter(redisAddr string, name string, limit int) *RateLimiter {
 	}
 }
 
-// fallbackAllow uses a per-IP in-memory token bucket when Redis is down.
+// fallbackAllow Redis down olduğunda IP başına in-memory token bucket kullanır.
 func (rl *RateLimiter) fallbackAllow(ip string) bool {
 	rl.fallbackMu.Lock()
 	lim, ok := rl.fallbackLimiters[ip]
