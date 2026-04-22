@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"strconv"
+	"time"
 
 	"github.com/Vuate/api-gateway/config"
 	"github.com/Vuate/api-gateway/internal/handler"
@@ -18,6 +19,15 @@ import (
 func getEnvInt(key string, def int) int {
 	if v := os.Getenv(key); v != "" {
 		if parsed, err := strconv.Atoi(v); err == nil {
+			return parsed
+		}
+	}
+	return def
+}
+
+func getEnvDuration(key string, def time.Duration) time.Duration {
+	if v := os.Getenv(key); v != "" {
+		if parsed, err := time.ParseDuration(v); err == nil {
 			return parsed
 		}
 	}
@@ -62,12 +72,19 @@ func main() {
 	marketDataCB := apimiddleware.NewCircuitBreaker("market-data")
 	exchangeCB := apimiddleware.NewCircuitBreaker("exchange")
 
+	marketDataTimeout := getEnvDuration("TIMEOUT_MARKET_DATA", 5*time.Second)
+	exchangeTimeout := getEnvDuration("TIMEOUT_EXCHANGE", 10*time.Second)
+
 	// Auth — JWT gerekmez, rate limit yok
-	r.Handle("/api/v1/auth/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
+	r.Group(func(r chi.Router) {
+		r.Use(apimiddleware.TimeoutMiddleware(exchangeTimeout))
+		r.Handle("/api/v1/auth/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
+	})
 
 	// Group A — 30 RPS: high-frequency market data
 	r.Group(func(r chi.Router) {
 		r.Use(rlA.Middleware)
+		r.Use(apimiddleware.TimeoutMiddleware(marketDataTimeout))
 		r.Handle("/api/v1/quotes/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
 		r.Handle("/api/v1/history/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
 		r.Handle("/api/v1/ohlcv/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
@@ -77,6 +94,7 @@ func main() {
 	// Group B — 5 RPS: order book and analytics
 	r.Group(func(r chi.Router) {
 		r.Use(rlB.Middleware)
+		r.Use(apimiddleware.TimeoutMiddleware(marketDataTimeout))
 		r.Handle("/api/v1/orderbook/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
 		r.Handle("/api/v1/spread/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
 		r.Handle("/api/v1/funding/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
@@ -90,6 +108,7 @@ func main() {
 	// Group C — 2 RPS: expensive / low-frequency endpoints
 	r.Group(func(r chi.Router) {
 		r.Use(rlC.Middleware)
+		r.Use(apimiddleware.TimeoutMiddleware(marketDataTimeout))
 		r.Handle("/api/v1/whale-alerts", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
 		r.Handle("/api/v1/wallet/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
 		r.Handle("/api/v1/news", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
@@ -100,7 +119,7 @@ func main() {
 		r.Handle("/api/v1/token-flow/*", marketDataCB.Wrap(handler.NewProxy(cfg.MarketDataURL)))
 	})
 
-	// WebSocket — circuit breaker yok, rate limit yok
+	// WebSocket — circuit breaker yok, rate limit yok, timeout yok
 	r.Handle("/ws", handler.NewWebSocketProxy(cfg.MarketDataURL))
 	r.Handle("/ws/quotes/*", handler.NewWebSocketProxy(cfg.MarketDataURL))
 	r.Handle("/ws/orderbook", handler.NewWebSocketProxy(cfg.MarketDataURL))
@@ -108,6 +127,7 @@ func main() {
 	// Protected — JWT zorunlu
 	r.Group(func(r chi.Router) {
 		r.Use(apimiddleware.JWTAuth(cfg.JWTSecret))
+		r.Use(apimiddleware.TimeoutMiddleware(exchangeTimeout))
 		r.Handle("/positions/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
 		r.Handle("/api/v1/pnl/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
 		r.Handle("/api/v1/orders", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
