@@ -6,13 +6,15 @@ import (
 	"net"
 	"net/http"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/redis/go-redis/v9"
+	"golang.org/x/time/rate"
 )
 
-// slidingWindowScript atomically checks and increments a sliding window counter.
-// Returns 1 if request is allowed, 0 if rate limit exceeded.
+// slidingWindowScript kayan pencere sayacını atomik olarak kontrol eder ve artırır.
+// İstek geçerliyse 1, limit aşıldıysa 0 döner.
 var slidingWindowScript = redis.NewScript(`
 local key    = KEYS[1]
 local now    = tonumber(ARGV[1])
@@ -34,6 +36,10 @@ type RateLimiter struct {
 	windowMs int64
 	limit    int
 	name     string
+
+	// Redis erişilemez olduğunda devreye giren in-memory yedek (degraded mode)
+	fallbackMu      sync.Mutex
+	fallbackLimiters map[string]*rate.Limiter
 }
 
 func NewRateLimiter(redisAddr string, name string, limit int) *RateLimiter {
@@ -47,15 +53,28 @@ func NewRateLimiter(redisAddr string, name string, limit int) *RateLimiter {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	if err := client.Ping(ctx).Err(); err != nil {
-		log.Printf("WARNING: Redis connection failed (%v) — rate limiter will fail open", err)
+		log.Printf("[rate-limiter:%s] WARNING: Redis unavailable (%v) — starting in degraded mode", name, err)
 	}
 
 	return &RateLimiter{
-		client:   client,
-		windowMs: 1000,
-		limit:    limit,
-		name:     name,
+		client:           client,
+		windowMs:         1000,
+		limit:            limit,
+		name:             name,
+		fallbackLimiters: make(map[string]*rate.Limiter),
 	}
+}
+
+// fallbackAllow Redis down olduğunda IP başına in-memory token bucket kullanır.
+func (rl *RateLimiter) fallbackAllow(ip string) bool {
+	rl.fallbackMu.Lock()
+	lim, ok := rl.fallbackLimiters[ip]
+	if !ok {
+		lim = rate.NewLimiter(rate.Limit(rl.limit), rl.limit)
+		rl.fallbackLimiters[ip] = lim
+	}
+	rl.fallbackMu.Unlock()
+	return lim.Allow()
 }
 
 func (rl *RateLimiter) allow(ip string) bool {
@@ -71,9 +90,8 @@ func (rl *RateLimiter) allow(ip string) bool {
 		rl.limit,
 	).Int()
 	if err != nil {
-		// Fail open: Redis unavailable, let the request through
-		log.Printf("rate limiter redis error: %v", err)
-		return true
+		log.Printf("[rate-limiter:%s] redis error, falling back to in-memory: %v", rl.name, err)
+		return rl.fallbackAllow(ip)
 	}
 	return result == 1
 }
