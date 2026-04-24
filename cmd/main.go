@@ -77,14 +77,16 @@ func main() {
 
 	marketDataCB := apimiddleware.NewCircuitBreaker("market-data")
 	exchangeCB := apimiddleware.NewCircuitBreaker("exchange")
+	authCB := apimiddleware.NewCircuitBreaker("auth")
 
 	marketDataTimeout := getEnvDuration("TIMEOUT_MARKET_DATA", 5*time.Second)
 	exchangeTimeout := getEnvDuration("TIMEOUT_EXCHANGE", 10*time.Second)
+	authTimeout := getEnvDuration("TIMEOUT_AUTH", 10*time.Second)
 
 	// Auth — JWT gerekmez, rate limit yok
 	r.Group(func(r chi.Router) {
-		r.Use(apimiddleware.TimeoutMiddleware(exchangeTimeout))
-		r.Handle("/api/v1/auth/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
+		r.Use(apimiddleware.TimeoutMiddleware(authTimeout))
+		r.Handle("/api/v1/auth/*", authCB.Wrap(handler.NewProxy(cfg.AuthURL)))
 	})
 
 	// Group A — 30 RPS: high-frequency market data
