@@ -38,11 +38,14 @@ func main() {
 	cfg := config.Load()
 
 	// Group A: high-frequency market data (quotes, history, ohlcv, compare)
-	rlA := apimiddleware.NewRateLimiter(cfg.RedisURL, "groupA", getEnvInt("RATE_LIMIT_GROUP_A", 30))
+	rlA := apimiddleware.NewRateLimiter(cfg.RedisURL, "groupA", getEnvInt("RATE_LIMIT_GROUP_A", 30), time.Second)
 	// Group B: order book and analytics endpoints
-	rlB := apimiddleware.NewRateLimiter(cfg.RedisURL, "groupB", getEnvInt("RATE_LIMIT_GROUP_B", 5))
+	rlB := apimiddleware.NewRateLimiter(cfg.RedisURL, "groupB", getEnvInt("RATE_LIMIT_GROUP_B", 5), time.Second)
 	// Group C: expensive / low-frequency endpoints (news, whale-alerts, etc.)
-	rlC := apimiddleware.NewRateLimiter(cfg.RedisURL, "groupC", getEnvInt("RATE_LIMIT_GROUP_C", 2))
+	rlC := apimiddleware.NewRateLimiter(cfg.RedisURL, "groupC", getEnvInt("RATE_LIMIT_GROUP_C", 2), time.Second)
+	// Auth: brute force koruması — login/register dakika bazlı limitli
+	rlAuthLogin := apimiddleware.NewRateLimiter(cfg.RedisURL, "auth-login", getEnvInt("RATE_LIMIT_AUTH_LOGIN", 10), time.Minute)
+	rlAuthRegister := apimiddleware.NewRateLimiter(cfg.RedisURL, "auth-register", getEnvInt("RATE_LIMIT_AUTH_REGISTER", 5), time.Minute)
 
 	allowedOrigin := os.Getenv("ALLOWED_ORIGIN")
 	if allowedOrigin == "" {
@@ -77,14 +80,18 @@ func main() {
 
 	marketDataCB := apimiddleware.NewCircuitBreaker("market-data")
 	exchangeCB := apimiddleware.NewCircuitBreaker("exchange")
+	authCB := apimiddleware.NewCircuitBreaker("auth")
 
 	marketDataTimeout := getEnvDuration("TIMEOUT_MARKET_DATA", 5*time.Second)
 	exchangeTimeout := getEnvDuration("TIMEOUT_EXCHANGE", 10*time.Second)
+	authTimeout := getEnvDuration("TIMEOUT_AUTH", 10*time.Second)
 
-	// Auth — JWT gerekmez, rate limit yok
+	// Auth — JWT gerekmez, endpoint bazlı rate limit (brute force koruması)
 	r.Group(func(r chi.Router) {
-		r.Use(apimiddleware.TimeoutMiddleware(exchangeTimeout))
-		r.Handle("/api/v1/auth/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
+		r.Use(apimiddleware.TimeoutMiddleware(authTimeout))
+		r.With(rlAuthLogin.Middleware).Handle("/api/v1/auth/login", authCB.Wrap(handler.NewProxy(cfg.AuthURL)))
+		r.With(rlAuthRegister.Middleware).Handle("/api/v1/auth/register", authCB.Wrap(handler.NewProxy(cfg.AuthURL)))
+		r.Handle("/api/v1/auth/*", authCB.Wrap(handler.NewProxy(cfg.AuthURL)))
 	})
 
 	// Group A — 30 RPS: high-frequency market data

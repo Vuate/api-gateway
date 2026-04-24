@@ -42,7 +42,7 @@ type RateLimiter struct {
 	fallbackLimiters map[string]*rate.Limiter
 }
 
-func NewRateLimiter(redisAddr string, name string, limit int) *RateLimiter {
+func NewRateLimiter(redisAddr string, name string, limit int, window time.Duration) *RateLimiter {
 	client := redis.NewClient(&redis.Options{
 		Addr:         redisAddr,
 		DialTimeout:  2 * time.Second,
@@ -58,7 +58,7 @@ func NewRateLimiter(redisAddr string, name string, limit int) *RateLimiter {
 
 	return &RateLimiter{
 		client:           client,
-		windowMs:         1000,
+		windowMs:         window.Milliseconds(),
 		limit:            limit,
 		name:             name,
 		fallbackLimiters: make(map[string]*rate.Limiter),
@@ -70,7 +70,9 @@ func (rl *RateLimiter) fallbackAllow(ip string) bool {
 	rl.fallbackMu.Lock()
 	lim, ok := rl.fallbackLimiters[ip]
 	if !ok {
-		lim = rate.NewLimiter(rate.Limit(rl.limit), rl.limit)
+		// rate.Limit per-second cinsinden; window'a göre doğru oranı hesapla
+		ratePerSec := rate.Limit(float64(rl.limit) / (float64(rl.windowMs) / 1000.0))
+		lim = rate.NewLimiter(ratePerSec, rl.limit)
 		rl.fallbackLimiters[ip] = lim
 	}
 	rl.fallbackMu.Unlock()

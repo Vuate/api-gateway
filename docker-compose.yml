@@ -18,4 +18,5 @@ services:
       - JWT_SECRET=supersecretkey123
       - REDIS_URL=redis:6379
       - ALLOWED_ORIGIN=${ALLOWED_ORIGIN:-http://localhost:3000}
+      - AUTH_URL=${AUTH_URL:-http://auth-service:8082}
 

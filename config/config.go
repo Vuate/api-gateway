@@ -9,6 +9,7 @@ type Config struct {
 	JWTSecret     string
 	MarketDataURL string
 	ExchangeURL   string
+	AuthURL       string
 	RedisURL      string
 }
 
@@ -28,6 +29,11 @@ func Load() *Config {
 		exchangeURL = "https://contextured-tora-nontribally.ngrok-free.dev"
 	}
 
+	authURL := os.Getenv("AUTH_URL")
+	if authURL == "" {
+		authURL = "http://auth-service:8082"
+	}
+
 	redisURL := os.Getenv("REDIS_URL")
 	if redisURL == "" {
 		redisURL = "redis:6379"
@@ -38,6 +44,7 @@ func Load() *Config {
 		JWTSecret:     os.Getenv("JWT_SECRET"),
 		MarketDataURL: marketDataURL,
 		ExchangeURL:   exchangeURL,
+		AuthURL:       authURL,
 		RedisURL:      redisURL,
 	}
 }
