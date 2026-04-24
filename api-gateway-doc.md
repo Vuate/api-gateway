@@ -2,7 +2,7 @@
 
 | Proje | Servis | Dil / Runtime | Son Güncelleme |
 |---|---|---|---|
-| Tresaurio Kripto Portföy Yönetim Platformu | api-gateway | Go 1.26.1 | 2026-04-22 |
+| Tresaurio Kripto Portföy Yönetim Platformu | api-gateway | Go 1.26.1 | 2026-04-24 |
 
 ---
 
@@ -69,7 +69,7 @@ Her istek aşağıdaki sırayla middleware'den geçer:
 ```
 Request
    │
-   ├─► CORS            (Access-Control-* headers; OPTIONS preflight → 204)
+   ├─► CORS            (Access-Control-Allow-Origin: ALLOWED_ORIGIN env var; Allow-Credentials: true; OPTIONS preflight → 204)
    ├─► Logger          (chi — tüm istekleri loglar)
    ├─► Recoverer       (chi — panic'leri yakalar, 500 döner)
    ├─► RequestID       (UUID üretir / X-Request-ID header'ını okur, context'e yazar, response'a ekler)
@@ -450,6 +450,7 @@ Client ──── ws/wss ────► api-gateway ──── ws/wss ─�
 | Değişken | Varsayılan | Açıklama |
 |---|---|---|
 | `PORT` | `9000` | Gateway'in dinlediği port |
+| `ALLOWED_ORIGIN` | `http://localhost:3000` | CORS için izin verilen frontend origin — `credentials: include` ile çalışmak için spesifik domain zorunlu; production'da set edilmeli |
 | `JWT_SECRET` | `"default-secret-change-in-production"` | JWT doğrulama anahtarı — production'da mutlaka set edilmeli |
 | `MARKET_DATA_URL` | `<market-data-ngrok-url>` | market-data servisinin adresi |
 | `EXCHANGE_URL` | `<exchange-ngrok-url>` | exchange-service'in adresi |
@@ -604,4 +605,4 @@ go run ./cmd/main.go
 
 ---
 
-*Tresaurio Platform — api-gateway v0.9.0*
+*Tresaurio Platform — api-gateway v0.9.1*
