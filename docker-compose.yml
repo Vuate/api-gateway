@@ -10,11 +10,11 @@ services:
     build: .
     image: api-gateway:latest
     ports:
-      - "9000:8080"
+      - "9000:9000"
     depends_on:
       - redis
     environment:
-      - PORT=8080
+      - PORT=9000
       - JWT_SECRET=supersecretkey123
       - REDIS_URL=redis:6379
       - ALLOWED_ORIGIN=${ALLOWED_ORIGIN:-http://localhost:3000}
