@@ -139,7 +139,7 @@ func main() {
 
 	// Protected — JWT zorunlu
 	r.Group(func(r chi.Router) {
-		r.Use(apimiddleware.JWTAuth(cfg.JWTSecret))
+		r.Use(apimiddleware.JWTAuthWithRedis(cfg.JWTSecret, cfg.RedisURL))
 		r.Use(apimiddleware.TimeoutMiddleware(exchangeTimeout))
 		r.Handle("/positions/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
 		r.Handle("/api/v1/pnl/*", exchangeCB.Wrap(handler.NewProxy(cfg.ExchangeURL)))
