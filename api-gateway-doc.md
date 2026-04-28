@@ -2,7 +2,7 @@
 
 | Proje | Servis | Dil / Runtime | Son Güncelleme |
 |---|---|---|---|
-| Tresaurio Kripto Portföy Yönetim Platformu | api-gateway | Go 1.26.1 | 2026-04-27 |
+| Tresaurio Kripto Portföy Yönetim Platformu | api-gateway | Go 1.26.1 | 2026-04-28 |
 
 ---
 
