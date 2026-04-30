@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net"
 	"net/http"
 	"os"
@@ -91,6 +92,7 @@ func (cb *CircuitBreaker) isOpen() bool {
 		if time.Since(cb.lastFailureTime) > cb.timeout {
 			cb.state = stateHalfOpen
 			cb.successes = 0
+			log.Printf("[CB] %s: Open → Half-Open (test isteği bekleniyor)", cb.serviceName)
 			return false
 		}
 		return true
@@ -107,6 +109,7 @@ func (cb *CircuitBreaker) onSuccess() {
 			cb.failures = 0
 			cb.successes = 0
 			cb.state = stateClosed
+			log.Printf("[CB] %s: Half-Open → Closed (servis düzeldi)", cb.serviceName)
 			SetCircuitBreakerOpen(cb.serviceName, false)
 		}
 	} else {
@@ -123,6 +126,7 @@ func (cb *CircuitBreaker) onFailure() {
 	cb.lastFailureTime = time.Now()
 	if cb.failures >= cb.maxFailures {
 		cb.state = stateOpen
+		log.Printf("[CB] %s: Closed → Open (hata eşiği aşıldı: %d/%d)", cb.serviceName, cb.failures, cb.maxFailures)
 		SetCircuitBreakerOpen(cb.serviceName, true)
 	}
 }
