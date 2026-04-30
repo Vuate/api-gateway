@@ -28,6 +28,7 @@ func Health(cfg *config.Config) http.HandlerFunc {
 		upstreamServices := map[string]string{
 			"market-data": cfg.MarketDataURL + "/health",
 			"exchange":    cfg.ExchangeURL + "/health",
+			"auth":        cfg.AuthURL + "/health",
 		}
 
 		ctx, cancel := context.WithTimeout(r.Context(), healthCheckTimeout)

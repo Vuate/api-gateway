@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"errors"
+	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
@@ -11,7 +12,10 @@ import (
 )
 
 func NewProxy(target string) http.Handler {
-	u, _ := url.Parse(target)
+	u, err := url.Parse(target)
+	if err != nil {
+		log.Fatalf("[proxy] geçersiz upstream URL %q: %v", target, err)
+	}
 	proxy := httputil.NewSingleHostReverseProxy(u)
 	proxy.Director = func(req *http.Request) {
 		req.URL.Scheme = u.Scheme
