@@ -20,7 +20,7 @@ func JWTAuth(secret string) func(http.Handler) http.Handler {
 
 func JWTAuthWithRedis(secret, redisAddr string) func(http.Handler) http.Handler {
 	if secret == "" {
-		secret = "default-secret-change-in-production"
+		panic("JWT_SECRET environment variable is not set")
 	}
 	var rdb *redis.Client
 	if redisAddr != "" {
