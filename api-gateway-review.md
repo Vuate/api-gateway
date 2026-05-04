@@ -1,6 +1,18 @@
 # API Gateway — Mimari Analiz Raporu
 
-> Tarih: 2026-04-30
+> Tarih: 2026-04-30 — Son güncelleme: 2026-05-04
+
+---
+
+## Son Değişiklikler
+
+| Commit | Değişiklik |
+|--------|-----------|
+| `da53893` | **Güvenlik:** JWT fallback secret kaldırıldı — `JWT_SECRET` boşsa startup'ta panic (fail-fast) |
+| `12e25de` | **Test:** auth, rate limiter, proxy, websocket için unit test eklendi |
+| `12e25de` | **Gözlemlenebilirlik:** Circuit breaker state geçişleri (`Closed→Open`, `Open→Half-Open`, `Half-Open→Closed`) artık loglanıyor |
+| `12e25de` | **Kararlılık:** Proxy geçersiz upstream URL'de `log.Fatalf` ile başlamayı reddediyor |
+| `12e25de` | **Health:** Auth servisi sağlık kontrolüne eklendi |
 
 ---
 
@@ -10,15 +22,15 @@
 |------|------|-------|
 | Mimari | 7/10 | İyi yapılandırılmış, eksik pattern'lar var |
 | Kod Kalitesi | 6/10 | Okunabilir ama error handling zayıf |
-| Güvenlik | 6/10 | JWT/CB iyi, config güvenliği zayıf |
-| Test Coverage | 3/10 | Sadece circuit breaker test var |
-| Observability | 6/10 | Prometheus var, tracing yok |
+| Güvenlik | 7/10 | JWT fail-fast eklendi, diğer config sorunları devam ediyor |
+| Test Coverage | 6/10 | auth, ratelimit, proxy, websocket, circuit breaker testleri mevcut |
+| Observability | 7/10 | Prometheus + CB state log'ları var, tracing yok |
 
 ---
 
 ## Kritik Sorunlar
 
-### 1. TLS Doğrulaması Kapalı
+### 1. TLS Doğrulaması Kapalı `🖥️ Sunucu alınınca`
 **Dosya:** `internal/handler/websocket.go:26`
 ```go
 TLSClientConfig: &tls.Config{InsecureSkipVerify: true}
@@ -45,29 +57,22 @@ market-data | exchange | auth | frontend
 
 ---
 
-### 2. JWT Fallback Secret
-**Dosya:** `internal/middleware/auth.go:23`
+### 2. JWT Fallback Secret `✅ Çözüldü — da53893`
+**Dosya:** `internal/middleware/auth.go:22-24`
+
+`da53893` commit'iyle `"default-secret-change-in-production"` fallback satırı kaldırıldı. Artık `JWT_SECRET` boşsa middleware yüklenirken `panic("JWT_SECRET environment variable is not set")` fırlatılıyor — uygulama yanlış config ile hiç başlamıyor.
+
 ```go
-secret = "default-secret-change-in-production"
-```
-
-**Şu an (local):** docker-compose'da `JWT_SECRET=supersecretkey123` set edilmiş, fallback devreye girmiyor. Sorun yok.
-
-**Prod'da yapılması gereken:**
-
-Fallback satırı tamamen kaldırılmalı, secret yoksa uygulama başlamasın. Bunu yapmanın faydası: yanlış config ile prod'a çıkma ihtimali sıfırlanır, uygulama başlamayı reddeder ve log'a net hata yazar — sessizce güvenlik açığıyla çalışmak yerine.
-```go
-// config/config.go — startup'ta zorunlu kıl
-secret := os.Getenv("JWT_SECRET")
+// mevcut davranış — secret boşsa startup'ta crash
 if secret == "" {
-    log.Fatal("JWT_SECRET is required")
+    panic("JWT_SECRET environment variable is not set")
 }
 ```
-Sunucuda `.env` dosyasına güçlü bir secret ekle:
+
+Sunucu kurulumunda `.env` dosyasına güçlü bir secret eklemek yeterli:
 ```bash
 JWT_SECRET=$(openssl rand -hex 32)
 ```
-Bu komutu bir kere çalıştır, çıkan değeri `.env`'e yaz, bir daha dokunmuyorsun.
 
 **Token geçersizse ne olur:**
 - **api-gateway:** 401 döner, detay vermez
@@ -75,7 +80,7 @@ Bu komutu bir kere çalıştır, çıkan değeri `.env`'e yaz, bir daha dokunmuy
 
 ---
 
-### 3. Redis Hata Durumunda Blacklist Bypass
+### 3. Redis Hata Durumunda Blacklist Bypass `⚠️ Prod öncesi değiştirilmeli`
 **Dosya:** `internal/middleware/auth.go:70-75`
 
 Logout olan kullanıcının token'ı Redis blacklist'ine ekleniyor. Redis down olursa bu kontrol atlanıyor — logout olmuş kullanıcı sisteme girebiliyor.
@@ -92,13 +97,11 @@ if err != nil {
 
 ---
 
-### 4. WebSocket CheckOrigin Her Zaman `true`
+### 4. WebSocket CheckOrigin Her Zaman `true` `⚠️ Prod öncesi değiştirilmeli`
 **Dosya:** `internal/handler/websocket.go:18`
 ```go
 CheckOrigin: func(r *http.Request) bool { return true }
 ```
-
-**Şu an (local):** Sadece sen kullandığın için sorun yok.
 
 **Prod'da yapılması gereken:** `ALLOWED_ORIGIN` env var zaten config'de mevcut, tek satır değişiklikle her katman kendi işini yapar (defense in depth — JWT yetkilendirme yapar, CheckOrigin origin kontrol eder, biri devre dışı kalırsa diğeri tutar):
 ```go
@@ -113,7 +116,7 @@ ALLOWED_ORIGIN=https://your-domain.com
 
 ---
 
-### 5. `/metrics` ve `/swagger` Endpoint'leri Auth Yok
+### 5. `/metrics` ve `/swagger` Endpoint'leri Auth Yok `🖥️ Sunucu alınınca (Nginx config)`
 **Dosya:** `cmd/main.go:75-81`
 
 - `/metrics` → sistemin iç durumu (istek sayısı, circuit breaker, rate limit istatistikleri) herkese açık
@@ -135,7 +138,7 @@ location /swagger {
 
 ---
 
-### 6. Graceful Shutdown Yok
+### 6. Graceful Shutdown Yok `⚠️ Prod öncesi değiştirilmeli`
 **Dosya:** `cmd/main.go:174`
 
 Şu an sunucu kapatılınca (deploy, restart) o anda işlenmekte olan tüm istekler anında kesilir. Exchange, order, pozisyon gibi kritik işlemler yarıda kalabilir.
@@ -159,7 +162,7 @@ Sinyal gelince yeni istek almayı durdurur, mevcut isteklerin bitmesini bekler, 
 
 ---
 
-### 7. Request Body Size Limit Yok
+### 7. Request Body Size Limit Yok `⚠️ Prod öncesi değiştirilmeli`
 
 Sınırsız body kabul ediliyor — biri kasıtlı büyük istek gönderirse sunucu belleği dolar, çöker.
 
@@ -180,7 +183,7 @@ Prod'da ekstra yapılacak bir şey yok, kod değişikliği yeterli.
 
 ## Orta Öncelikli Sorunlar
 
-### 8. Config'de Hardcoded Ngrok URL'leri
+### 8. Config'de Hardcoded Ngrok URL'leri `🖥️ Sunucu alınınca`
 **Dosya:** `config/config.go:24-30`
 
 **Şu an (local):** Ngrok fallback olarak config.go'ya hardcoded — env var set edilmezse bu URL'ler devreye giriyor. Ngrok URL'leri birkaç saatte expire olabiliyor ve kaynak koda commit edilmiş durumda.
@@ -189,7 +192,7 @@ Prod'da ekstra yapılacak bir şey yok, kod değişikliği yeterli.
 
 ---
 
-### 9. Health Handler Her Çağrıda Yeni `http.Client` Açıyor
+### 9. Health Handler Her Çağrıda Yeni `http.Client` Açıyor `🔧 Şimdiden`
 **Dosya:** `internal/handler/health.go:78`
 
 Şu an her `/health` çağrısında yeni bir `http.Client` oluşturuluyor — her seferinde yeni TCP bağlantısı açılıp kapanıyor. TCP bağlantısı açmak ~50-100ms maliyet, her seferinde bu ödeniyor.
@@ -209,7 +212,7 @@ res, err := healthClient.Do(req)
 
 ---
 
-### 10. Rate Limiter Fallback Bellek Sızıntısı
+### 10. Rate Limiter Fallback Bellek Sızıntısı `📦 Prod sonrası`
 **Dosya:** `internal/middleware/ratelimit.go:74`
 
 Redis down olunca her unique IP için in-memory limiter oluşturuluyor, hiçbiri temizlenmiyor.
@@ -222,7 +225,7 @@ Redis down olunca her unique IP için in-memory limiter oluşturuluyor, hiçbiri
 
 ---
 
-### 11. Public WebSocket'lere Hiçbir Koruma Yok
+### 11. Public WebSocket'lere Hiçbir Koruma Yok `⚠️ Prod öncesi değiştirilmeli`
 **Dosya:** `cmd/main.go:136-139`
 
 Public WS endpoint'lerinde üç koruma da eksik — kodun kendi yorumunda bile yazıyor:
@@ -237,8 +240,6 @@ r.Handle("/ws/orderbook", handler.NewWebSocketProxy(cfg.MarketDataURL))
 - **Rate limit yok** → biri bot ile sınırsız WS bağlantısı açabilir, sunucu kaynakları tükenir
 - **Timeout yok** → bağlantı sonsuza kadar açık kalabilir
 
-**Şu an (local):** Sadece sen kullanıyorsun, sorun yok.
-
 **Prod öncesi yapılması gereken:** Sadece `cmd/main.go` değişiyor:
 ```go
 r.With(rlA.Middleware).Handle("/ws", marketDataCB.Wrap(handler.NewWebSocketProxy(cfg.MarketDataURL)))
@@ -248,12 +249,10 @@ r.With(rlA.Middleware).Handle("/ws/orderbook", marketDataCB.Wrap(handler.NewWebS
 
 ---
 
-### 12. X-Forwarded-For Spoofing
+### 12. X-Forwarded-For Spoofing `🖥️ Sunucu alınınca (Cloudflare kurulunca)`
 **Dosya:** `internal/middleware/ratelimit.go:104`
 
 Rate limiter IP'ye göre kısıtlama yapıyor ama IP'yi kullanıcının yazabildiği `X-Forwarded-For` header'ından alıyor. Biri her istekte farklı IP yazarsa rate limit hiç tetiklenmiyor — sınırsız istek atabilir.
-
-**Şu an (local):** Sadece sen kullanıyorsun, sorun yok.
 
 **Prod'da:** Cloudflare kullanılacağı için bu sorun büyük ölçüde çözülüyor. Cloudflare gerçek IP'yi `CF-Connecting-IP` header'ında gönderiyor, bunu spoof etmek mümkün değil. Kod değişikliği gerekiyor:
 ```go
@@ -265,7 +264,7 @@ if ip == "" {
 
 ---
 
-### 13. `/api/v1/auth/*` Wildcard Rate Limitsiz
+### 13. `/api/v1/auth/*` Wildcard Rate Limitsiz `⚠️ Prod öncesi değiştirilmeli`
 **Dosya:** `cmd/main.go:95`
 
 Login ve register'a ayrı rate limit var ama diğer auth endpoint'leri (`/api/v1/auth/*` wildcard'ı) korumasız:
@@ -275,8 +274,6 @@ r.With(rlAuthRegister.Middleware).Handle("/api/v1/auth/register", ...) // rate l
 r.Handle("/api/v1/auth/*", ...)                                        // rate limit yok!
 ```
 
-**Şu an (local):** Sadece sen kullanıyorsun, sorun yok.
-
 **Prod'da:** Logout, refresh-token gibi endpoint'lere sınırsız istek atılabilir — auth servisi yükü artar. Çözüm basit, prod öncesi yapılmalı:
 ```go
 r.With(rlAuthLogin.Middleware).Handle("/api/v1/auth/*", authCB.Wrap(...))
@@ -284,7 +281,7 @@ r.With(rlAuthLogin.Middleware).Handle("/api/v1/auth/*", authCB.Wrap(...))
 
 ---
 
-### 14. `NewProxy()` Her Route'da Ayrı Instance Oluşturuluyor
+### 14. `NewProxy()` Her Route'da Ayrı Instance Oluşturuluyor `🔧 Şimdiden`
 **Dosya:** `cmd/main.go:102-134`
 
 Aynı upstream'e giden 20+ route var ama her biri için ayrı `NewProxy()` çağrılıyor — yani 20 ayrı bağlantı havuzu oluşuyor. `httputil.ReverseProxy` thread-safe tasarlanmış, tek instance tüm route'lar tarafından paylaşılabilir.
@@ -303,7 +300,7 @@ r.Handle("/api/v1/history/*", marketDataCB.Wrap(marketDataProxy))
 
 ---
 
-### 15. Çift Loglama — İki Logger Aynı Anda Aktif
+### 15. Çift Loglama — İki Logger Aynı Anda Aktif `🔧 Şimdiden`
 **Dosya:** `cmd/main.go:69-73`
 
 İki logger aynı anda aktif, her istek iki kez loglanıyor:
@@ -324,7 +321,7 @@ r.Use(apimiddleware.RequestLogger)
 
 ---
 
-### 16. `getEnvInt` / `getEnvDuration` İki Yerde Tanımlı
+### 16. `getEnvInt` / `getEnvDuration` İki Yerde Tanımlı `🔧 Şimdiden`
 **Dosya:** `cmd/main.go:19` ve `middleware/circuitbreaker.go:39`
 
 Aynı fonksiyon iki dosyada birebir kopyalanmış. Yarın bu fonksiyona bir şey eklemek gerekirse iki yerde değiştirmek gerekiyor — biri unutulursa ikisi farklı davranmaya başlar.
@@ -341,8 +338,15 @@ Her iki dosya da oradan import eder, değişiklik gerekince tek yerden hallolur.
 
 ---
 
-### 17. Circuit Breaker Half-Open'da Thundering Herd
+### 17. Circuit Breaker Half-Open'da Thundering Herd `⚠️ Prod öncesi değiştirilmeli`
 **Dosya:** `internal/middleware/circuitbreaker.go:86-98`
+
+`12e25de` commit'iyle state geçişleri artık loglanıyor:
+```
+[CB] market-data: Closed → Open (hata eşiği aşıldı: 5/5)
+[CB] market-data: Open → Half-Open (test isteği bekleniyor)
+[CB] market-data: Half-Open → Closed (servis düzeldi)
+```
 
 **Şu an (local):** Aynı anda çok fazla kullanıcı yok, fark etmez.
 
@@ -352,10 +356,10 @@ Her iki dosya da oradan import eder, değişiklik gerekince tek yerden hallolur.
 
 ---
 
-### 18. `/health` Endpoint'inde Cache Yok — Load Multiplier
+### 18. `/health` Endpoint'inde Cache Yok — Load Multiplier `📦 Prod sonrası`
 **Dosya:** `internal/handler/health.go:26`
 
-Şu an: Her `/health` çağrısı anında market-data ve exchange servislerine birer HTTP isteği gönderiyor. Monitoring sistemi 10 saniyede bir çağırsa sorun yok, ama kullanıcı tarafından çağrılıyorsa 100 istek = 200 outgoing request.
+`12e25de` commit'iyle auth servisi sağlık kontrolüne eklendi — artık 3 servis kontrol ediliyor (market-data, exchange, auth). Her `/health` çağrısı 3 servise paralel HTTP isteği gönderiyor. Monitoring sistemi 10 saniyede bir çağırsa sorun yok, ama kullanıcı tarafından çağrılıyorsa 100 istek = 300 outgoing request.
 
 Çözüm: Sonuçları 5-10 saniye in-memory cache'e al, aynı süre içindeki isteklere cache'den dön.
 
@@ -364,9 +368,10 @@ Her iki dosya da oradan import eder, değişiklik gerekince tek yerden hallolur.
 
 ## Küçük Ama Önemli
 
-| # | Sorun | Dosya | Ne Zaman |
-|---|-------|-------|----------|
-| 19 | `log.Printf` yerine JSON logging olmalı, prod'da log analizi zorlaşıyor | `middleware/logging.go` | Prod öncesi |
+| # | Durum | Sorun | Dosya | Ne Zaman |
+|---|-------|-------|-------|----------|
+| 19 | Açık | `log.Printf` yerine JSON logging olmalı, prod'da log analizi zorlaşıyor | `middleware/logging.go` | Prod öncesi |
+| 20 | ✅ `12e25de` | Geçersiz upstream URL sessizce geçiliyordu — artık `log.Fatalf` ile startup'ta crash | `handler/proxy.go:17` | Çözüldü |
 
 ---
 
@@ -400,3 +405,34 @@ Ağ kopması olunca frontend aynı order isteğini 2 kez gönderebilir, bu durum
 
 **Schema validation middleware**
 Gelen request body'nin beklenen formatta olup olmadığını (zorunlu alanlar, tip kontrolü) upstream servise ulaşmadan gateway'de kontrol etmek. Şu an exchange ve auth servisleri kendi validasyonunu yapıyor, gateway'de tekrar yapmak overengineering olur. İleride public API açılırsa değerlendirilebilir.
+
+---
+
+## Prod'a Geçişte Değişecek Env Değişkenleri
+
+| Env Değişkeni | Şu an (local) | Prod'da | İlgili Madde |
+|---------------|--------------|---------|--------------|
+| `MARKET_DATA_URL` | ngrok URL (hardcoded fallback) | `http://market-data-service:8080` | Madde 8 |
+| `EXCHANGE_URL` | ngrok URL (hardcoded fallback) | `http://exchange-service:8081` | Madde 8 |
+| `AUTH_URL` | ngrok URL (hardcoded fallback) | `http://auth-service:8082` | Madde 8 |
+| `JWT_SECRET` | docker-compose'da set edilmiş | `openssl rand -hex 32` ile üret, `.env`'e yaz | Madde 2 |
+| `ALLOWED_ORIGIN` | `http://localhost:3000` | `https://domain.com` | Madde 4 |
+| `REDIS_URL` | `redis:6379` | değişmiyor, aynı kalıyor | Madde 3 |
+
+> Bu URL'ler docker-compose'da zaten doğru set edilmiş. Yapılması gereken tek şey `config.go`'daki ngrok fallback URL'lerini silmek — env set edilmezse uygulama başlamasın.
+
+---
+
+## Diğer Servisleri Etkileyen Maddeler
+
+| Servis | Etkilendiği Madde | Ne Yapması Gerekiyor |
+|--------|------------------|----------------------|
+| **auth-service** | Madde 2 (JWT_SECRET) | api-gateway ile aynı `JWT_SECRET` kullanmalı — farklı olursa token doğrulanamaz |
+| **auth-service** | Madde 7 (Body limit) | Endpoint bazlı küçük limitler (örn. login: 4KB) auth-service'in kendi sorumluluğu |
+| **exchange-service** | Madde 7 (Body limit) | Order body'si büyükse kendi servisinde ayrıca limit eklemeli |
+| **frontend-service** | Madde 2 (JWT) | 401 alınca kullanıcıyı login sayfasına yönlendirmeli, yeni token alınca tekrar dener |
+| **frontend-service** | Madde 4 (CheckOrigin) | `ALLOWED_ORIGIN` frontend'in domain'iyle eşleşmeli — yanlış domain girilirse WS bağlantısı reddedilir |
+| **market-data-service** | Madde 11 (WS koruma) | Public WS'e rate limit + CB eklenmezse market-data çöktüğünde bot bağlantıları servisi daha da zorlar |
+| **market-data + exchange** | Madde 18 (/health cache) | Her `/health` çağrısında bu servislere istek gidiyor — cache eklenmezse her ikisi de gereksiz yük alır |
+| **Nginx** | Madde 1 (TLS) | TLS'i Nginx halleder, `InsecureSkipVerify` kod tarafında kaldırılır |
+| **Nginx** | Madde 5 (/metrics /swagger) | IP kısıtlaması Nginx config'de yapılır, kod değişikliği gerekmez |
